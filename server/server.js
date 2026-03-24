@@ -8,9 +8,7 @@ app.get('/api/health', (req, res) => res.json({ status: 'Smartsphere API is live
 const clientBuildPath = path.join(__dirname, '../client/dist');
 app.use('/projects/smartsphere', express.static(clientBuildPath));
 
-app.get('/', (req, res) => res.redirect('/projects/smartsphere'));
-
-app.get('*', (req, res) => {
+app.get(/.*/, (req, res) => {
     res.sendFile(path.join(clientBuildPath, 'index.html'));
 });
 
