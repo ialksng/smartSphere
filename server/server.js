@@ -10,7 +10,7 @@ const clientBuildPath = path.join(__dirname, '../client/dist');
 app.use('/projects/smartsphere', express.static(clientBuildPath));
 
 // Catch-all for React Router
-app.get('/projects/smartsphere/*', (req, res) => {
+app.get('/projects/smartsphere/(*)', (req, res) => {
     res.sendFile(path.join(clientBuildPath, 'index.html'));
 });
 
