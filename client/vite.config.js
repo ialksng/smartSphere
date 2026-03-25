@@ -7,7 +7,7 @@ export default defineConfig({
   base: '/projects/smartsphere/', 
   server: {
     proxy: {
-      '/api': {
+      '/projects/smartsphere/api': {
         target: 'http://localhost:5000',
         changeOrigin: true,
       }

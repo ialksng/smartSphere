@@ -11,8 +11,8 @@ const PORT = process.env.PORT || 5000;
 
 app.use(express.json());
 
-app.get('/api/health', (req, res) => res.json({ status: 'Smartsphere API is live' }));
-app.use('/api/auth', authRoutes);
+app.get('/projects/smartsphere/api/health', (req, res) => res.json({ status: 'Smartsphere API is live' }));
+app.use('/projects/smartsphere/api/auth', authRoutes);
 
 const clientBuildPath = path.join(__dirname, '../client/dist');
 app.use('/projects/smartsphere', express.static(clientBuildPath));

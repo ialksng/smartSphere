@@ -2,7 +2,7 @@ export default function Dashboard() {
     
     const handleGoogleConnect = () => {
 
-        window.location.href = '/api/auth/google';
+        window.location.href = '/projects/smartsphere/api/auth/google';
     };
 
     return (
