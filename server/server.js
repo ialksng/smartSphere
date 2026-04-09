@@ -21,13 +21,13 @@ app.get('/api/health', (req, res) => {
 
 const clientBuildPath = path.join(__dirname, '../client/dist');
 
-// FIX 1: Serve the static files exactly where Vite expects them to be
+// FIX 1: Serve the static files exactly where Vite expects them
 app.use('/projects/smartsphere', express.static(clientBuildPath));
 
 // FIX 2: Also serve them at the root just in case
 app.use(express.static(clientBuildPath));
 
-// FIX 3: If someone visits the root domain, redirect them to your project path
+// FIX 3: Redirect the bare domain to your project path
 app.get('/', (req, res) => {
     res.redirect('/projects/smartsphere');
 });
