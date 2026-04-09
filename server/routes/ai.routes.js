@@ -4,8 +4,7 @@ const multer = require('multer');
 const { analyzeText } = require('../services/ai.service');
 const { extractTextFromBuffer } = require('../services/document.service');
 const Insight = require('../models/Insight');
-
-// const { verifyToken } = require('../middleware/auth.middleware');
+const { verifyToken } = require('../middleware/auth.middleware');
 
 const router = express.Router();
 
@@ -15,14 +14,14 @@ const router = express.Router();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
+    fileSize: 5 * 1024 * 1024, // 5MB
   },
 });
 
 /* =========================
-   1. CHAT (RAG ENABLED)
+   1. CHAT (SECURE + RAG)
 ========================= */
-router.post('/chat', async (req, res) => {
+router.post('/chat', verifyToken, async (req, res) => {
   try {
     const { message, history = [] } = req.body;
 
@@ -30,10 +29,9 @@ router.post('/chat', async (req, res) => {
       return res.status(400).json({ message: "Message is required" });
     }
 
-    // 👉 Replace with req.user.id after auth
-    const userId = '65f0a0b1c2d3e4f5a6b7c8d9';
+    const userId = req.user.id;
 
-    /* ===== FETCH CONTEXT ===== */
+    /* ===== FETCH USER DOCUMENTS ===== */
     const recentInsights = await Insight.find({ userId })
       .sort({ createdAt: -1 })
       .limit(3);
@@ -44,7 +42,7 @@ router.post('/chat', async (req, res) => {
       documentContext += `\n--- KNOWLEDGE BASE CONTEXT ---\n`;
 
       for (const doc of recentInsights) {
-        const safeContent = doc.content.substring(0, 8000); // safer limit
+        const safeContent = doc.content.substring(0, 6000);
 
         documentContext += `
 Document: ${doc.filename}
@@ -59,12 +57,12 @@ ${safeContent}
       documentContext += `--- END CONTEXT ---\n\n`;
     }
 
-    /* ===== HISTORY FORMAT ===== */
+    /* ===== FORMAT HISTORY ===== */
     const conversationHistory = history
       .map((msg) => `${msg.role === 'user' ? 'User' : 'AI'}: ${msg.text}`)
       .join('\n');
 
-    /* ===== FINAL PROMPT ===== */
+    /* ===== PROMPT ===== */
     const prompt = `
 ${documentContext}
 
@@ -75,15 +73,16 @@ User: ${message}
 AI:
 `;
 
-    /* ===== SYSTEM INSTRUCTION ===== */
+    /* ===== SYSTEM PROMPT ===== */
     const systemInstruction = `
-You are Smart Sphere, an advanced AI assistant with access to the user's private documents.
+You are Smart Sphere, an AI assistant with access to user documents.
 
 Rules:
-1. Prefer answers from the provided context
+1. Prefer knowledge base context
 2. If not found, use general knowledge
-3. Keep answers concise and helpful
-4. Mention document names if used
+3. Be concise and accurate
+4. Mention document name if used
+5. Do not hallucinate missing info
 `;
 
     /* ===== AI CALL ===== */
@@ -93,26 +92,28 @@ Rules:
 
   } catch (error) {
     console.error("CHAT ERROR:", error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "Chat failed", error: error.message });
   }
 });
 
 /* =========================
-   2. FILE UPLOAD (RAG INGESTION)
+   2. UPLOAD (SECURE RAG INGESTION)
 ========================= */
-router.post('/upload', upload.single('file'), async (req, res) => {
+router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
   try {
+    const userId = req.user.id;
+
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
     }
 
     const { buffer, mimetype, originalname } = req.file;
 
-    /* ===== TEXT EXTRACTION ===== */
+    /* ===== EXTRACT TEXT ===== */
     const extractedText = await extractTextFromBuffer(buffer, mimetype);
 
     if (!extractedText || extractedText.trim().length === 0) {
-      return res.status(400).json({ message: "Could not extract text from file" });
+      return res.status(400).json({ message: "Text extraction failed" });
     }
 
     /* ===== CLEAN TEXT ===== */
@@ -120,30 +121,30 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
     /* ===== SUMMARY ===== */
     const summaryPrompt = `
-Summarize the following document in 2 concise sentences:
+Summarize this document in 2 concise sentences:
 
 ${cleanText.substring(0, 3000)}
 `;
 
     const summary = await analyzeText(
       summaryPrompt,
-      "You are a precise document summarizer."
+      "You are a precise summarizer."
     );
 
-    /* ===== SAVE TO DB ===== */
+    /* ===== SAVE ===== */
     const newInsight = new Insight({
-      userId: '65f0a0b1c2d3e4f5a6b7c8d9', // replace later with req.user.id
+      userId,
       filename: originalname,
       fileType: mimetype,
       content: cleanText,
-      summary: summary,
+      summary,
       source: 'local',
     });
 
     await newInsight.save();
 
     res.json({
-      message: "File processed successfully",
+      message: "File uploaded & processed",
       insightId: newInsight._id,
       filename: originalname,
       summary,
@@ -151,7 +152,7 @@ ${cleanText.substring(0, 3000)}
 
   } catch (error) {
     console.error("UPLOAD ERROR:", error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "Upload failed", error: error.message });
   }
 });
 

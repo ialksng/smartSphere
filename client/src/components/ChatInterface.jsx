@@ -22,7 +22,7 @@ export default function ChatInterface() {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
-                    // 'Authorization': `Bearer ${localStorage.getItem('sphere_token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('sphere_token')}`
                 },
                 body: JSON.stringify({ 
                     message: input, 
