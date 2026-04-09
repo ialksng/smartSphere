@@ -14,6 +14,8 @@ app.use(cors());
 app.use(express.json());
 
 app.use('/api/auth', require('./routes/auth.routes'));
+app.use('/api/ai', require('./routes/ai.routes'));     
+app.use('/api/cloud', require('./routes/cloud.routes'));
 
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'Smart Sphere API is running' });
