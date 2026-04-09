@@ -13,23 +13,27 @@ mongoose.connect(process.env.MONGO_URI)
 app.use(cors());
 app.use(express.json());
 
-app.use('/api/auth', require('./routes/auth.routes'));
-app.use('/api/ai', require('./routes/ai.routes'));     
-app.use('/api/cloud', require('./routes/cloud.routes'));
+// --- FIX: Define base path to match Vercel proxy routing ---
+const BASE_PATH = '/projects/smartsphere';
 
-app.get('/api/health', (req, res) => {
+app.use(`${BASE_PATH}/api/auth`, require('./routes/auth.routes'));
+app.use(`${BASE_PATH}/api/ai`, require('./routes/ai.routes'));     
+app.use(`${BASE_PATH}/api/cloud`, require('./routes/cloud.routes'));
+
+app.get(`${BASE_PATH}/api/health`, (req, res) => {
     res.json({ status: 'ok', message: 'Smart Sphere API is running' });
 });
+// -----------------------------------------------------------
 
 const clientBuildPath = path.join(__dirname, '../client/dist');
 
-// FIX 1: Serve the static files exactly where Vite expects them
+// Serve the static files exactly where Vite expects them
 app.use('/projects/smartsphere', express.static(clientBuildPath));
 
-// FIX 2: Also serve them at the root just in case
+// Also serve them at the root just in case
 app.use(express.static(clientBuildPath));
 
-// FIX 3: Redirect the bare domain to your project path
+// Redirect the bare domain to your project path
 app.get('/', (req, res) => {
     res.redirect('/projects/smartsphere');
 });

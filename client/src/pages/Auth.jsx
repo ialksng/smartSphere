@@ -24,7 +24,10 @@ export default function Auth() {
         setIsLoading(true);
         setError('');
 
-        const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
+        // --- FIX: Added the base path to the endpoints ---
+        const endpoint = isLogin 
+            ? '/projects/smartsphere/api/auth/login' 
+            : '/projects/smartsphere/api/auth/register';
 
         try {
             const res = await fetch(endpoint, {
