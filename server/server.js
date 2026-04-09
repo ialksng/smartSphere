@@ -13,17 +13,17 @@ mongoose.connect(process.env.MONGO_URI)
 app.use(cors());
 app.use(express.json());
 
-// --- FIX: Define base path to match Vercel proxy routing ---
-const BASE_PATH = '/projects/smartsphere';
+// --- FIX: Reverted API routes to standard paths ---
+// Vercel's proxy strips the subpath before it reaches here, 
+// so the backend just needs to listen on /api
+app.use('/api/auth', require('./routes/auth.routes'));
+app.use('/api/ai', require('./routes/ai.routes'));     
+app.use('/api/cloud', require('./routes/cloud.routes'));
 
-app.use(`${BASE_PATH}/api/auth`, require('./routes/auth.routes'));
-app.use(`${BASE_PATH}/api/ai`, require('./routes/ai.routes'));     
-app.use(`${BASE_PATH}/api/cloud`, require('./routes/cloud.routes'));
-
-app.get(`${BASE_PATH}/api/health`, (req, res) => {
+app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'Smart Sphere API is running' });
 });
-// -----------------------------------------------------------
+// --------------------------------------------------
 
 const clientBuildPath = path.join(__dirname, '../client/dist');
 
