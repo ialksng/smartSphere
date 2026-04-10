@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Folder, FileText, Search, Star, Trash2 } from "lucide-react";
+import { Folder, FileText, Search, Star, Trash2, Plus } from "lucide-react";
 
 const DocHub = () => {
   const [items, setItems] = useState([]);
@@ -21,6 +21,22 @@ const DocHub = () => {
 
   const openFile = (file) => {
     setSelectedFile(file);
+  };
+
+  const createFile = async () => {
+    const name = prompt("File name");
+    if (!name) return;
+
+    await fetch("/projects/smartsphere/api/dochub/file", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("sphere_token")}`
+      },
+      body: JSON.stringify({ filename: name, content: "" })
+    });
+
+    fetchItems();
   };
 
   return (
@@ -70,17 +86,52 @@ const DocHub = () => {
           <div className="text-sm">Hi, John 👋</div>
         </div>
 
-        <h3 className="text-lg font-semibold mb-3">My Cloud</h3>
+        <div className="grid md:grid-cols-3 gap-6 mb-8">
 
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          {items.slice(0, 3).map(file => (
+          <div
+            onClick={() => {
+              const choice = prompt("Create in: local / cloud");
+              if (!choice) return;
+
+              if (choice === "local") {
+                createFile();
+              } else {
+                const cloud = prompt("Which cloud: google / onedrive");
+                alert(`Will create in ${cloud}`);
+              }
+            }}
+            className="p-6 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 cursor-pointer hover:scale-105 transition"
+          >
+            <Plus className="mb-2" />
+            <h2 className="text-lg font-semibold mb-1">New Document</h2>
+            <p className="text-sm text-white/80">Create local or cloud</p>
+          </div>
+
+          <div className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition cursor-pointer">
+            <Star className="mb-2 text-yellow-400" />
+            <h2 className="text-lg font-semibold mb-1">Favorites</h2>
+            <p className="text-sm text-gray-400">Starred files</p>
+          </div>
+
+          <div className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition cursor-pointer">
+            <Trash2 className="mb-2 text-red-400" />
+            <h2 className="text-lg font-semibold mb-1">Trash</h2>
+            <p className="text-sm text-gray-400">Deleted files</p>
+          </div>
+
+        </div>
+
+        <h3 className="text-lg font-semibold mb-3">Recent Documents</h3>
+
+        <div className="grid md:grid-cols-4 gap-4 mb-8">
+          {items.slice(0, 8).map(doc => (
             <div
-              key={file._id}
-              onClick={() => openFile(file)}
-              className="bg-white/10 p-4 rounded-xl cursor-pointer hover:bg-white/20"
+              key={doc._id}
+              onClick={() => openFile(doc)}
+              className="p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 cursor-pointer transition"
             >
-              <p className="text-sm">{file.filename}</p>
-              <p className="text-xs text-gray-400 mt-2">{file.size || 0} bytes</p>
+              <FileText className="text-blue-400 mb-2" size={20} />
+              <p className="text-sm truncate">{doc.filename}</p>
             </div>
           ))}
         </div>
@@ -127,7 +178,7 @@ const DocHub = () => {
               <h4 className="text-sm font-semibold mb-2">Storage Details</h4>
 
               <div className="bg-white/10 p-4 rounded-lg text-center">
-                <p className="text-lg font-bold">512 GB</p>
+                <p className="text-lg font-bold">512 MB</p>
                 <p className="text-xs text-gray-400">Used Storage</p>
               </div>
             </div>

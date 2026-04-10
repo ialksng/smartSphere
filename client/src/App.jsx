@@ -6,6 +6,7 @@ import GoogleDriveHub from './pages/GoogleDriveHub';
 import DocHub from './pages/DocHub';
 import CloudHub from './pages/CloudHub';
 import BuddyBot from './pages/BuddyBot';
+import MyStorage from './pages/MyStorage';
 
 import MainLayout from './layouts/MainLayout';
 
@@ -24,6 +25,7 @@ function App() {
   return (
     <BrowserRouter basename="/projects/smartsphere">
       <Routes>
+
         <Route path="/" element={<Navigate to="/auth" replace />} />
         <Route path="/auth" element={<Auth />} />
 
@@ -55,6 +57,15 @@ function App() {
         />
 
         <Route 
+          path="/mystorage" 
+          element={
+            <ProtectedLayout>
+              <MyStorage />
+            </ProtectedLayout>
+          } 
+        />
+
+        <Route 
           path="/dochub" 
           element={
             <ProtectedLayout>
@@ -73,6 +84,7 @@ function App() {
         />
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
+
       </Routes>
     </BrowserRouter>
   );

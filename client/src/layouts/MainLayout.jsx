@@ -47,6 +47,13 @@ export default function MainLayout({ children }) {
             onClick={() => navigate('/cloudhub')}
           />
 
+          {/* MY STORAGE */}
+          <NavItem
+            icon={<FileText size={18} />}
+            label="MyStorage"
+            onClick={() => navigate('/mystorage')}
+          />
+
           {/* BUDDYBOT */}
           <NavItem
             icon={<Bot size={18} />}
