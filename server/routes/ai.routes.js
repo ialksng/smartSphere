@@ -1,9 +1,9 @@
-import express from 'express';
-import multer from 'multer';
-import { analyzeText, chatWithAI } from '../services/ai.service.js';
-import { extractTextFromBuffer } from '../services/document.service.js';
-import Insight from '../models/Insight.js';
-import { verifyToken } from '../middleware/auth.middleware.js';
+const express = require('express');
+const multer = require('multer');
+const { analyzeText, chatWithAI } = require('../services/ai.service.js');
+const { extractTextFromBuffer } = require('../services/document.service.js');
+const Insight = require('../models/Insight.js');
+const { verifyToken } = require('../middleware/auth.middleware.js');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -113,4 +113,4 @@ router.get('/insights', verifyToken, async (req, res) => {
     }
 });
 
-export default router;
+module.exports = router;
