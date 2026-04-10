@@ -11,7 +11,8 @@ const callGroqFallback = async (prompt) => {
         const response = await axios.post(
             'https://api.groq.com/openai/v1/chat/completions',
             {
-                model: "mixtral-8x7b-32768",
+                // FIX: Updated to a currently supported model
+                model: "llama-3.3-70b-versatile", 
                 messages: [{ role: "user", content: prompt }]
             },
             {
@@ -23,7 +24,6 @@ const callGroqFallback = async (prompt) => {
         );
         return response.data.choices[0].message.content;
     } catch (error) {
-        // IMPROVED LOGGING: Catch the exact reason Groq failed
         const groqError = error.response ? JSON.stringify(error.response.data) : error.message;
         console.error("❌ Groq API also failed:", groqError);
         throw new Error(`AI APIs failed. Gemini and Groq both rejected the request. Check server logs.`);
@@ -42,7 +42,6 @@ const analyzeText = async (text, task = "summarize") => {
         });
         return response.text;
     } catch (error) {
-        // IMPROVED LOGGING: Catch the exact reason Gemini failed
         console.error("❌ Gemini API failed:", error.message);
         // Trigger Fallback
         return await callGroqFallback(prompt);
