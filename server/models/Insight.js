@@ -1,81 +1,84 @@
 const mongoose = require('mongoose');
 
 const insightSchema = new mongoose.Schema({
-    userId: { 
-        type: mongoose.Schema.Types.ObjectId, 
-        ref: 'User', 
-        required: true 
-    },
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
 
-    filename: { 
-        type: String, 
-        required: true 
-    },
+  filename: {
+    type: String,
+    required: true
+  },
 
-    fileType: { 
-        type: String 
-    },
+  content: {
+    type: String,
+    required: true
+  },
 
-    content: { 
-        type: String, 
-        required: true
-    },
+  summary: {
+    type: String
+  },
 
-    summary: { 
-        type: String
-    },
+  fileType: {
+    type: String
+  },
 
-    // 🔥 SOURCE
-    source: {
-        type: String,
-        enum: ['local', 'google_drive', 'onedrive'],
-        default: 'local'
-    },
+  contentType: {
+    type: String,
+    enum: ['text', 'pdf', 'image'],
+    default: 'text'
+  },
 
-    contentType: {
-        type: String,
-        enum: ['text', 'pdf', 'image'],
-        default: 'text'
-    },
+  type: {
+    type: String,
+    enum: ['file', 'folder'],
+    default: 'file'
+  },
 
-    driveFileId: {
-        type: String,
-        default: null
-    },
+  parentId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Insight',
+    default: null
+  },
 
-    fileUrl: {
-        type: String,
-        default: null
-    },
+  folder: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Insight',
+    default: null
+  },
 
-    // =========================
-    // 🔥 NEW SaaS FEATURES
-    // =========================
+  source: {
+    type: String,
+    enum: ['local', 'google_drive', 'onedrive'],
+    default: 'local'
+  },
 
-    // 📁 Folder support
-    folder: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Folder',
-        default: null
-    },
+  driveFileId: {
+    type: String,
+    default: null
+  },
 
-    // ⭐ Favorites
-    isFavorite: {
-        type: Boolean,
-        default: false
-    },
+  fileUrl: {
+    type: String,
+    default: null
+  },
 
-    // 🧠 AI Tags
-    tags: {
-        type: [String],
-        default: []
-    },
+  isFavorite: {
+    type: Boolean,
+    default: false
+  },
 
-    // 📊 File size (for analytics)
-    size: {
-        type: Number,
-        default: 0
-    }
+  tags: {
+    type: [String],
+    default: []
+  },
+
+  size: {
+    type: Number,
+    default: 0
+  }
 
 }, { timestamps: true });
 
