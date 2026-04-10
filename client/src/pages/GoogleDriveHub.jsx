@@ -12,7 +12,7 @@ export default function GoogleDriveHub() {
   const [driveFiles, setDriveFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [importingFileId, setImportingFileId] = useState(null);
-  const [errorMessage, setErrorMessage] = useState(null); // Added error state
+  const [errorMessage, setErrorMessage] = useState(null); 
 
   const [currentFolder, setCurrentFolder] = useState({ id: 'root', name: 'My Drive' });
   const [folderHistory, setFolderHistory] = useState([]);
@@ -107,6 +107,30 @@ export default function GoogleDriveHub() {
     }
   };
 
+  const handleConnectGoogle = async () => {
+    try {
+      const token = localStorage.getItem('sphere_token');
+      if (!token) return alert("Please log in first.");
+
+      // Decode the JWT to get the user ID required by your backend route
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const userId = payload.id || payload._id;
+
+      const res = await fetch(`/projects/smartsphere/api/cloud/google/auth?userId=${userId}`);
+      const data = await res.json();
+
+      if (data.url) {
+        // Redirect to the Google Consent Screen
+        window.location.href = data.url; 
+      } else {
+        alert("Failed to get authentication URL.");
+      }
+    } catch (err) {
+      console.error("Auth error:", err);
+      alert("Error connecting to Google.");
+    }
+  };
+
   // SAFELY filter items only if driveFiles is an array
   const safeDriveFiles = Array.isArray(driveFiles) ? driveFiles : [];
   const folders = safeDriveFiles.filter(f => f.mimeType?.includes('folder'));
@@ -194,10 +218,20 @@ export default function GoogleDriveHub() {
             <Loader2 className="animate-spin text-blue-400" size={32} />
           </div>
         ) : errorMessage ? (
+          
           <div className="flex flex-col items-center justify-center text-red-400 py-10">
+            {/* Moved the comment safely inside the div */}
+            {/* Reconnect Button UI */}
             <AlertCircle size={40} className="mb-4 opacity-80" />
-            <p className="text-center">{errorMessage}</p>
+            <p className="text-center mb-6">{errorMessage}</p>
+            <button 
+              onClick={handleConnectGoogle}
+              className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition flex items-center gap-2 shadow-lg"
+            >
+              <Cloud size={18} /> Reconnect Google Drive
+            </button>
           </div>
+
         ) : files.length === 0 && folders.length === 0 ? (
           <div className="text-center text-gray-500 py-10">
             No files found
