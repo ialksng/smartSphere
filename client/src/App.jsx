@@ -3,6 +3,7 @@ import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
 import GoogleDriveHub from './pages/GoogleDriveHub'; 
 import DocHub from './pages/DocHub';
+import MainLayout from './layouts/MainLayout'; // 🔥 NEW
 
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem('sphere_token');
@@ -23,32 +24,37 @@ function App() {
         {/* Public */}
         <Route path="/auth" element={<Auth />} />
 
-        {/* Protected */}
+        {/* 🔥 PROTECTED + LAYOUT WRAPPED ROUTES */}
+
         <Route 
           path="/dashboard" 
           element={
             <ProtectedRoute>
-              <Dashboard />
+              <MainLayout>
+                <Dashboard />
+              </MainLayout>
             </ProtectedRoute>
           } 
         />
 
-        {/* Google Drive */}
         <Route 
           path="/cloudhub/google" 
           element={
             <ProtectedRoute>
-              <GoogleDriveHub />
+              <MainLayout>
+                <GoogleDriveHub />
+              </MainLayout>
             </ProtectedRoute>
           } 
         />
 
-        {/* 🔥 DOCHUB (NEW) */}
         <Route 
           path="/dochub" 
           element={
             <ProtectedRoute>
-              <DocHub />
+              <MainLayout>
+                <DocHub />
+              </MainLayout>
             </ProtectedRoute>
           } 
         />
