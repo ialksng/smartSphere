@@ -33,18 +33,18 @@ export default function MainLayout({ children }) {
             onClick={() => navigate('/dashboard')}
           />
 
-          {/* MY STORAGE */}
-          <NavItem
-            icon={<FileText size={18} />}
-            label="MyStorage"
-            onClick={() => navigate('/mystorage')}
-          />
-
           {/* CLOUD HUB */}
           <NavItem
             icon={<Cloud size={18} />}
             label="CloudHub"
             onClick={() => navigate('/cloudhub')}
+          />
+
+          {/* MY STORAGE */}
+          <NavItem
+            icon={<FileText size={18} />}
+            label="MyStorage"
+            onClick={() => navigate('/mystorage')}
           />
 
           {/* DOCHUB */}
