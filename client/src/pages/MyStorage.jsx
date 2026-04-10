@@ -9,23 +9,24 @@ import {
 export default function MyStorage() {
   const navigate = useNavigate();
 
-  const [files, setFiles] = useState([]);
-  const [folders, setFolders] = useState([]);
-  const [currentFolder, setCurrentFolder] = useState(null);
-  const [folderPath, setFolderPath] = useState([]);
+  // Unified Storage State (Files and Folders are fetched together from DocHub)
+  const [items, setItems] = useState([]); 
   const [used, setUsed] = useState(0);
+
+  // Folder Navigation State
+  const [currentFolder, setCurrentFolder] = useState({ id: null, name: 'My Storage' });
+  const [folderHistory, setFolderHistory] = useState([]);
 
   // UI States
   const [showUploadMenu, setShowUploadMenu] = useState(false);
-  const [exportMenuId, setExportMenuId] = useState(null); // Tracks which file's export menu is open
+  const [exportMenuId, setExportMenuId] = useState(null); 
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, file: null });
   
   const uploadMenuRef = useRef(null);
 
   useEffect(() => {
-    fetchData();
+    fetchData(currentFolder.id);
     
-    // Close context and dropdown menus when clicking elsewhere
     const handleClickOutside = (e) => {
       setContextMenu({ visible: false, x: 0, y: 0, file: null });
       setExportMenuId(null);
@@ -35,21 +36,23 @@ export default function MyStorage() {
     };
     window.addEventListener("click", handleClickOutside);
     return () => window.removeEventListener("click", handleClickOutside);
-  }, []);
+  }, [currentFolder]);
 
-  const fetchData = async () => {
-    const token = localStorage.getItem('sphere_token');
-    const headers = { Authorization: `Bearer ${token}` };
+  const fetchData = async (parentId = null) => {
+    const url = parentId 
+      ? `/projects/smartsphere/api/dochub?parentId=${parentId}` 
+      : `/projects/smartsphere/api/dochub`;
 
     try {
-      const resFiles = await fetch('/projects/smartsphere/api/dochub', { headers });
-      const dataFiles = await resFiles.json();
-      setFiles(dataFiles || []);
-      setUsed((dataFiles || []).reduce((acc, f) => acc + (f.size || 0), 0));
-
-      const resFolders = await fetch('/projects/smartsphere/api/folders', { headers });
-      const dataFolders = await resFolders.json();
-      setFolders(dataFolders || []);
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('sphere_token')}` }
+      });
+      const data = await res.json();
+      setItems(data || []);
+      
+      // Calculate total storage used (only files have size)
+      const total = (data || []).reduce((acc, f) => acc + (f.size || 0), 0);
+      setUsed(total);
     } catch (error) {
       console.error("Error fetching storage data:", error);
     }
@@ -59,34 +62,30 @@ export default function MyStorage() {
     const name = prompt("Enter folder name:");
     if (!name) return;
 
-    await fetch('/projects/smartsphere/api/folders', {
+    await fetch('/projects/smartsphere/api/dochub/folder', {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
       },
-      body: JSON.stringify({ name, parent: currentFolder })
+      body: JSON.stringify({ name, parentId: currentFolder.id })
     });
-    fetchData();
+    fetchData(currentFolder.id);
   };
 
   const handleCreateFile = async () => {
     const name = prompt("Enter file name (e.g., document.txt):");
     if (!name) return;
 
-    const formData = new FormData();
-    // FIX: Append folderId BEFORE the file so backend parsers (like multer) catch it in time
-    if (currentFolder) formData.append("folderId", currentFolder);
-    
-    const emptyBlob = new Blob([""], { type: "text/plain" });
-    formData.append("file", emptyBlob, name);
-
-    await fetch('/projects/smartsphere/api/dochub/upload', {
+    await fetch('/projects/smartsphere/api/dochub/file', {
       method: "POST",
-      headers: { Authorization: `Bearer ${localStorage.getItem('sphere_token')}` },
-      body: formData
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
+      },
+      body: JSON.stringify({ filename: name, content: "", parentId: currentFolder.id })
     });
-    fetchData();
+    fetchData(currentFolder.id);
   };
 
   const handleUpload = async (e) => {
@@ -95,8 +94,7 @@ export default function MyStorage() {
 
     for (let i = 0; i < selectedFiles.length; i++) {
       const formData = new FormData();
-      // FIX: Append folderId FIRST
-      if (currentFolder) formData.append("folderId", currentFolder);
+      if (currentFolder.id) formData.append("parentId", currentFolder.id);
       formData.append("file", selectedFiles[i]);
 
       await fetch('/projects/smartsphere/api/dochub/upload', {
@@ -105,38 +103,43 @@ export default function MyStorage() {
         body: formData
       });
     }
-    fetchData();
+    fetchData(currentFolder.id);
     setShowUploadMenu(false);
   };
 
   // --- CLOUD PULL/PUSH FUNCTIONS ---
   
   const pullFromCloud = async (provider) => {
-    // Note: Update this endpoint to match your actual CloudHub import route
-    alert(`Initiating import from ${provider} to local storage...`);
-    await fetch('/projects/smartsphere/api/cloud/import', {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
-      },
-      body: JSON.stringify({ provider, folderId: currentFolder })
-    });
-    fetchData();
+    alert(`Initiating import from ${provider} to local storage... (Feature coming soon)`);
     setShowUploadMenu(false);
   };
 
   const pushToCloud = async (itemId, type, provider) => {
-    // Note: Update this endpoint to match your actual CloudHub export route
-    alert(`Exporting ${type} to ${provider}...`);
-    await fetch(`/projects/smartsphere/api/cloud/${provider}/upload-local`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
-      },
-      body: JSON.stringify({ itemId, type }) 
-    });
+    if (provider !== 'google') {
+        alert(`${provider} export coming soon!`);
+        setExportMenuId(null);
+        return;
+    }
+
+    try {
+      const res = await fetch('/projects/smartsphere/api/cloud/google/upload-dochub', {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
+        },
+        body: JSON.stringify({ fileId: itemId }) 
+      });
+      
+      const data = await res.json();
+      if (res.ok) {
+        alert("Uploaded to Google Drive Successfully!");
+      } else {
+        alert(`Failed: ${data.message}`);
+      }
+    } catch (err) {
+      alert("Error connecting to server.");
+    }
     setExportMenuId(null);
   };
 
@@ -150,7 +153,7 @@ export default function MyStorage() {
 
   const handleRename = async () => {
     if (!contextMenu.file) return;
-    const newName = prompt("Enter new name:", contextMenu.file.name || contextMenu.file.filename);
+    const newName = prompt("Enter new name:", contextMenu.file.filename);
     if (!newName) return;
 
     await fetch(`/projects/smartsphere/api/dochub/${contextMenu.file._id}`, {
@@ -159,58 +162,65 @@ export default function MyStorage() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
       },
-      body: JSON.stringify({ name: newName })
+      body: JSON.stringify({ name: newName }) // Adjust key based on your backend expectations (name vs filename)
     });
-    fetchData();
+    fetchData(currentFolder.id);
   };
 
   const handleDownload = () => {
     if (!contextMenu.file) return;
-    // Assumes backend serves the file at a specific URL, update if different
-    window.open(`/projects/smartsphere/api/dochub/download/${contextMenu.file._id}`, "_blank");
+    // Basic frontend download fallback if backend isn't ready
+    if(contextMenu.file.content) {
+        const blob = new Blob([contextMenu.file.content], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = contextMenu.file.filename;
+        a.click();
+    } else {
+        alert("File content unavailable for direct download.");
+    }
   };
 
   const handleDelete = async () => {
     if (!contextMenu.file) return;
     if (!window.confirm("Move to Trash?")) return;
 
-    // Assuming you have a trash route, otherwise change to DELETE method
-    await fetch(`/projects/smartsphere/api/dochub/${contextMenu.file._id}/trash`, {
-      method: "PUT",
+    // Use standard DELETE method if a specific trash route doesn't exist
+    await fetch(`/projects/smartsphere/api/dochub/${contextMenu.file._id}`, {
+      method: "DELETE",
       headers: { Authorization: `Bearer ${localStorage.getItem('sphere_token')}` }
     });
-    fetchData();
+    fetchData(currentFolder.id);
   };
 
   // --- NAVIGATION ---
 
   const openFolder = (folder) => {
-    setCurrentFolder(folder._id);
-    setFolderPath([...folderPath, { _id: folder._id, name: folder.name }]);
+    setFolderHistory(prev => [...prev, currentFolder]);
+    setCurrentFolder({ id: folder._id, name: folder.filename });
   };
 
   const navigateToBreadcrumb = (index) => {
     if (index === -1) {
-      setCurrentFolder(null);
-      setFolderPath([]);
+      setCurrentFolder({ id: null, name: 'My Storage' });
+      setFolderHistory([]);
     } else {
-      const newPath = folderPath.slice(0, index + 1);
-      setCurrentFolder(newPath[newPath.length - 1]._id);
-      setFolderPath(newPath);
+      const newHistory = folderHistory.slice(0, index);
+      const folder = folderHistory[index];
+      setFolderHistory(newHistory);
+      setCurrentFolder(folder);
     }
   };
 
-  // FIX: Open in doceditor instead of dochub
   const openFile = (file) => {
     navigate('/doceditor', { state: { fileId: file._id } });
   };
 
-  const currentFolders = folders.filter(f => f.parent === currentFolder);
-  const currentFiles = files.filter(f => (f.folderId || null) === currentFolder);
   const percent = Math.min((used / (500 * 1024 * 1024)) * 100, 100);
 
   return (
-    <div className="p-8 text-white bg-[#0b0f19] min-h-full relative">
+    <div className="p-8 text-white bg-[#0b0f19] min-h-screen relative">
       {/* HEADER */}
       <div className="flex items-center gap-3 mb-6">
         <button onClick={() => navigate('/dashboard')} className="p-2 rounded hover:bg-white/10">
@@ -227,13 +237,13 @@ export default function MyStorage() {
           <span>500 MB</span>
         </div>
         <div className="w-full bg-white/10 rounded-full h-2">
-          <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${percent}%` }} />
+          <div className="bg-blue-500 h-2 rounded-full transition-all" style={{ width: `${percent}%` }} />
         </div>
       </div>
 
       {/* ACTION BAR */}
       <div className="flex flex-wrap gap-4 mb-6 relative">
-        <button onClick={handleCreateFolder} className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded flex items-center gap-2 transition">
+        <button onClick={handleCreateFolder} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded flex items-center gap-2 transition shadow-lg">
           <FolderPlus size={16} /> New Folder
         </button>
         <button onClick={handleCreateFile} className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded flex items-center gap-2 transition">
@@ -244,7 +254,7 @@ export default function MyStorage() {
         <div className="relative" ref={uploadMenuRef}>
           <button 
             onClick={(e) => { e.stopPropagation(); setShowUploadMenu(!showUploadMenu); }} 
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded flex items-center gap-2 transition"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded flex items-center gap-2 transition shadow-lg"
           >
             <Upload size={16} /> Upload <ChevronRight size={16} className={`transform transition ${showUploadMenu ? 'rotate-90' : ''}`}/>
           </button>
@@ -257,22 +267,15 @@ export default function MyStorage() {
                 <FileText size={16} className="text-blue-400"/> File(s)
                 <input type="file" multiple hidden onChange={handleUpload} />
               </label>
-              <label className="flex items-center gap-3 px-4 py-2 hover:bg-white/5 cursor-pointer text-sm">
-                <FolderIcon size={16} className="text-yellow-400"/> Folder
-                <input type="file" webkitdirectory="true" directory="true" hidden onChange={handleUpload} />
-              </label>
               
               <div className="border-t border-white/10 my-1"></div>
               
-              <div className="p-2 text-xs text-gray-400 font-semibold uppercase tracking-wider">Import from CloudHub</div>
+              <div className="p-2 text-xs text-gray-400 font-semibold uppercase tracking-wider">Import from Cloud</div>
               <button onClick={() => pullFromCloud('google')} className="w-full flex items-center gap-3 px-4 py-2 hover:bg-white/5 text-sm text-left">
                 <CloudDownload size={16} className="text-green-400"/> Google Drive
               </button>
               <button onClick={() => pullFromCloud('onedrive')} className="w-full flex items-center gap-3 px-4 py-2 hover:bg-white/5 text-sm text-left">
                 <CloudDownload size={16} className="text-blue-400"/> OneDrive
-              </button>
-              <button onClick={() => pullFromCloud('dropbox')} className="w-full flex items-center gap-3 px-4 py-2 hover:bg-white/5 text-sm text-left">
-                <CloudDownload size={16} className="text-blue-600"/> Dropbox
               </button>
             </div>
           )}
@@ -282,76 +285,85 @@ export default function MyStorage() {
       {/* BREADCRUMBS */}
       <div className="flex items-center gap-2 mb-6 text-sm text-gray-400">
         <button onClick={() => navigateToBreadcrumb(-1)} className="hover:text-white transition">Root</button>
-        {folderPath.map((folder, index) => (
-          <div key={folder._id} className="flex items-center gap-2">
+        {folderHistory.map((folder, index) => (
+          <div key={folder.id} className="flex items-center gap-2">
             <ChevronRight size={14} />
             <button 
               onClick={() => navigateToBreadcrumb(index)}
-              className={`${index === folderPath.length - 1 ? "text-white font-medium" : "hover:text-white transition"}`}
+              className="hover:text-white transition"
             >
               {folder.name}
             </button>
           </div>
         ))}
+        {currentFolder.id && (
+          <div className="flex items-center gap-2">
+            <ChevronRight size={14} />
+            <span className="text-white font-medium">{currentFolder.name}</span>
+          </div>
+        )}
       </div>
 
+      <h2 className="text-lg font-semibold mb-4 border-b border-white/10 pb-2">Files & Folders</h2>
+
       {/* GRID */}
-      <div className="grid md:grid-cols-4 gap-4">
+      <div className="grid md:grid-cols-4 lg:grid-cols-5 gap-4">
         
-        {/* Render Folders */}
-        {currentFolders.map(folder => (
-          <div key={folder._id} className="p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition flex flex-col justify-between relative">
+        {/* Render Folders First */}
+        {items.filter(f => f.type === 'folder').map(folder => (
+          <div 
+            key={folder._id} 
+            onContextMenu={(e) => handleContextMenu(e, folder)}
+            className="p-4 rounded-xl bg-white/5 border border-transparent hover:border-emerald-500/50 hover:bg-white/10 transition flex flex-col justify-between relative group"
+          >
             <div onClick={() => openFolder(folder)} className="cursor-pointer">
-              <FolderIcon className="text-yellow-400 mb-2" size={24} fill="currentColor" />
-              <p className="text-sm font-medium truncate">{folder.name}</p>
+              <FolderIcon className="text-emerald-400 mb-2 group-hover:scale-110 transition-transform" size={24} fill="currentColor" />
+              <p className="text-sm font-medium truncate">{folder.filename}</p>
             </div>
             
             {/* Folder Export Dropdown Toggle */}
-            <button onClick={(e) => { e.stopPropagation(); setExportMenuId(exportMenuId === folder._id ? null : folder._id); }} className="mt-3 text-xs text-green-400 text-left hover:text-green-300 transition flex items-center gap-1">
-              <CloudUpload size={14} /> Export to Cloud
+            <button onClick={(e) => { e.stopPropagation(); setExportMenuId(exportMenuId === folder._id ? null : folder._id); }} className="mt-3 text-xs text-emerald-400 text-left hover:text-emerald-300 transition flex items-center gap-1 opacity-0 group-hover:opacity-100">
+              <CloudUpload size={14} /> Sync to Cloud
             </button>
             
             {/* Folder Export Menu */}
             {exportMenuId === folder._id && (
               <div className="absolute bottom-10 left-4 bg-[#1a2235] border border-white/10 rounded shadow-lg z-10 w-40 overflow-hidden">
                 <button onClick={() => pushToCloud(folder._id, 'folder', 'google')} className="w-full text-left px-3 py-2 text-xs hover:bg-white/5">Google Drive</button>
-                <button onClick={() => pushToCloud(folder._id, 'folder', 'onedrive')} className="w-full text-left px-3 py-2 text-xs hover:bg-white/5">OneDrive</button>
-                <button onClick={() => pushToCloud(folder._id, 'folder', 'dropbox')} className="w-full text-left px-3 py-2 text-xs hover:bg-white/5">Dropbox</button>
               </div>
             )}
           </div>
         ))}
 
         {/* Render Files */}
-        {currentFiles.map(file => (
+        {items.filter(f => f.type !== 'folder').map(file => (
           <div 
             key={file._id} 
             onContextMenu={(e) => handleContextMenu(e, file)}
-            className="p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition flex flex-col justify-between relative"
+            className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-blue-500/50 hover:bg-white/10 transition flex flex-col justify-between relative group"
           >
             <div onClick={() => openFile(file)} className="cursor-pointer">
               <FileText className="text-blue-400 mb-2" size={24} />
-              <p className="text-sm truncate">{file.name || file.filename}</p>
+              <p className="text-sm font-medium truncate">{file.filename}</p>
+              <p className="text-xs text-gray-500 mt-1">{(file.size / 1024).toFixed(1)} KB</p>
             </div>
 
              {/* File Export Dropdown Toggle */}
-             <button onClick={(e) => { e.stopPropagation(); setExportMenuId(exportMenuId === file._id ? null : file._id); }} className="mt-3 text-xs text-green-400 text-left hover:text-green-300 transition flex items-center gap-1">
-              <CloudUpload size={14} /> Export to Cloud
+             <button onClick={(e) => { e.stopPropagation(); setExportMenuId(exportMenuId === file._id ? null : file._id); }} className="mt-3 text-xs text-blue-400 text-left hover:text-blue-300 transition flex items-center gap-1 opacity-0 group-hover:opacity-100">
+              <CloudUpload size={14} /> Sync to Cloud
             </button>
 
             {/* File Export Menu */}
             {exportMenuId === file._id && (
               <div className="absolute bottom-10 left-4 bg-[#1a2235] border border-white/10 rounded shadow-lg z-10 w-40 overflow-hidden">
                 <button onClick={() => pushToCloud(file._id, 'file', 'google')} className="w-full text-left px-3 py-2 text-xs hover:bg-white/5">Google Drive</button>
-                <button onClick={() => pushToCloud(file._id, 'file', 'onedrive')} className="w-full text-left px-3 py-2 text-xs hover:bg-white/5">OneDrive</button>
-                <button onClick={() => pushToCloud(file._id, 'file', 'dropbox')} className="w-full text-left px-3 py-2 text-xs hover:bg-white/5">Dropbox</button>
               </div>
             )}
           </div>
         ))}
 
-        {currentFolders.length === 0 && currentFiles.length === 0 && (
-          <div className="col-span-4 text-center text-gray-500 py-8">
+        {items.length === 0 && (
+          <div className="col-span-full text-center text-gray-500 py-8">
             This folder is empty.
           </div>
         )}
@@ -365,16 +377,18 @@ export default function MyStorage() {
           onClick={(e) => e.stopPropagation()}
         >
           <div className="px-4 py-2 border-b border-white/10 text-gray-400 text-xs truncate">
-            {contextMenu.file.name || contextMenu.file.filename}
+            {contextMenu.file.filename}
           </div>
           <button onClick={() => { handleRename(); setContextMenu({visible: false}); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 text-left transition">
             <Edit2 size={16} className="text-yellow-400"/> Rename
           </button>
-          <button onClick={() => { handleDownload(); setContextMenu({visible: false}); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 text-left transition">
-            <Download size={16} className="text-blue-400"/> Download
-          </button>
+          {contextMenu.file.type !== 'folder' && (
+              <button onClick={() => { handleDownload(); setContextMenu({visible: false}); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 text-left transition">
+                <Download size={16} className="text-blue-400"/> Download
+              </button>
+          )}
           <button onClick={() => { handleDelete(); setContextMenu({visible: false}); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-red-500/20 text-red-400 text-left transition">
-            <Trash2 size={16} /> Move to Trash
+            <Trash2 size={16} /> Delete
           </button>
         </div>
       )}

@@ -72,19 +72,21 @@ const DocHub = () => {
 
       // 2. If user selected CloudHub, immediately export the new file to the selected cloud
       if (docLocation === "cloud") {
-        await fetch(`/projects/smartsphere/api/cloud/${cloudProvider}/upload-local`, {
+        await fetch(`/projects/smartsphere/api/cloud/${cloudProvider}/upload-dochub`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${localStorage.getItem("sphere_token")}`
             },
-            body: JSON.stringify({ itemId: newFile._id, type: 'file' })
+            // Aligned payload with cloud.routes.js expectation
+            body: JSON.stringify({ fileId: newFile._id }) 
         });
       }
 
       setIsModalOpen(false);
       setDocName("");
-      navigate('/editor', { state: { docId: newFile._id } });
+      // Navigating using URL parameter for useParams()
+      navigate(`/doceditor/${newFile._id}`);
 
     } catch (err) {
       console.error("Failed to create file", err);
@@ -96,7 +98,8 @@ const DocHub = () => {
 
   // ---- FILE ACTIONS ----
   const openFile = (file) => {
-    navigate('/editor', { state: { docId: file._id } });
+    // Navigating using URL parameter for useParams()
+    navigate(`/doceditor/${file._id}`);
   };
 
   const downloadFile = (file) => {
@@ -126,24 +129,35 @@ const DocHub = () => {
 
   const toggleTrash = async (file, moveToTrash) => {
     try {
-      await fetch(`/projects/smartsphere/api/dochub/${file._id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("sphere_token")}`
-        },
-        body: JSON.stringify({ isTrashed: moveToTrash })
-      });
+      // Using DELETE method to match your dochub.routes.js logic for trashing
+      if (moveToTrash) {
+          await fetch(`/projects/smartsphere/api/dochub/${file._id}`, {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("sphere_token")}`
+            }
+          });
+      } else {
+          // Note: Ensure your backend has a corresponding route/logic to restore from trash
+          await fetch(`/projects/smartsphere/api/dochub/${file._id}`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${localStorage.getItem("sphere_token")}`
+            },
+            body: JSON.stringify({ isTrashed: false })
+          });
+      }
       fetchItems(view); // Refresh list
     } catch (err) {
-      console.error("Failed to move to trash", err);
+      console.error("Failed to update trash status", err);
     }
   };
 
   const deletePermanently = async (file) => {
     if (!window.confirm("Are you sure you want to permanently delete this file?")) return;
     try {
-      await fetch(`/projects/smartsphere/api/dochub/${file._id}`, {
+      await fetch(`/projects/smartsphere/api/dochub/${file._id}/permanent`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${localStorage.getItem("sphere_token")}`
