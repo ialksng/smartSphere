@@ -1,17 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, Loader2, FileText, FileUp, HardDrive, Cloud, X } from 'lucide-react';
+import { Send, Paperclip, Loader2, FileText, FileUp, HardDrive, Cloud, X, Box } from 'lucide-react';
 
 export default function ChatInterface({ onInsightAdded }) {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
-    const [showAttachMenu, setShowAttachMenu] = useState(false); // NEW: Toggle for multi-source menu
+    const [showAttachMenu, setShowAttachMenu] = useState(false);
     
     const fileInputRef = useRef(null);
     const messagesEndRef = useRef(null);
 
-    // Auto-scroll to bottom on new messages
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
@@ -26,7 +25,6 @@ export default function ChatInterface({ onInsightAdded }) {
         setIsLoading(true);
 
         try {
-            // Filter out system/UI messages so the AI doesn't get confused by "Uploading..." text
             const cleanHistory = newHistory
                 .filter(msg => !msg.isSystem)
                 .slice(-6);
@@ -56,11 +54,14 @@ export default function ChatInterface({ onInsightAdded }) {
         }
     };
 
-    const handleFileUpload = async (event) => {
+    // --- FILE HANDLING METHODS ---
+
+    // 1. Local Storage (Device)
+    const handleLocalUpload = async (event) => {
         const file = event.target.files[0];
         if (!file) return;
 
-        setShowAttachMenu(false); // Close menu on upload start
+        setShowAttachMenu(false);
 
         const uploadMsg = { role: 'user', type: 'file', fileName: file.name, text: `Uploading ${file.name}...`, isSystem: true };
         setMessages(prev => [...prev, uploadMsg]);
@@ -82,7 +83,7 @@ export default function ChatInterface({ onInsightAdded }) {
             
             if (res.ok) {
                 setMessages(prev => [
-                    ...prev.slice(0, -1), // Remove the "Uploading..." placeholder
+                    ...prev.slice(0, -1),
                     { role: 'user', type: 'file', fileName: file.name, text: `Attached: ${file.name}`, isSystem: true },
                     { role: 'ai', text: `I've successfully read **${file.name}**. Here is a quick summary:\n\n${data.summary}\n\nYou can now ask me follow-up questions about this document.` }
                 ]);
@@ -99,22 +100,30 @@ export default function ChatInterface({ onInsightAdded }) {
         }
     };
 
-    // Placeholder functions for cloud imports
-    const handleDriveImport = () => {
+    // 2. SmartSphere Platform Storage
+    const handlePlatformStorageImport = () => {
         setShowAttachMenu(false);
-        alert("Integrate Google Drive Picker Here");
-        // In a real scenario, you'd open your Drive picker, get the file blob/ID, and send it to your upload route
+        alert("Integrate SmartSphere File Modal: Allow user to select a file already uploaded to their account.");
     };
 
-    const handleMyStorageImport = () => {
+    // 3. Cloud Drives
+    const handleGoogleDriveImport = () => {
         setShowAttachMenu(false);
-        alert("Open SmartSphere Storage Modal Here");
-        // In a real scenario, you'd allow them to pick an existing document from DocHub
+        alert("Integrate Google Drive Picker API here.");
+    };
+
+    const handleOneDriveImport = () => {
+        setShowAttachMenu(false);
+        alert("Integrate Microsoft OneDrive File Picker SDK here.");
+    };
+
+    const handleDropboxImport = () => {
+        setShowAttachMenu(false);
+        alert("Integrate Dropbox Chooser SDK here.");
     };
 
     return (
         <div className="flex flex-col h-full w-full bg-glassBg backdrop-blur-xl border border-glassBorder rounded-2xl shadow-2xl overflow-hidden text-white relative">
-            {/* Header */}
             <div className="p-4 border-b border-glassBorder bg-white/5 flex justify-between items-center">
                 <div>
                     <h2 className="text-xl font-semibold">BuddyBot AI</h2>
@@ -129,7 +138,6 @@ export default function ChatInterface({ onInsightAdded }) {
                 </div>
             </div>
 
-            {/* Chat Area */}
             <div className="flex-1 p-4 overflow-y-auto space-y-4">
                 {messages.length === 0 && (
                     <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm text-center">
@@ -171,12 +179,12 @@ export default function ChatInterface({ onInsightAdded }) {
                 <input 
                     type="file" 
                     ref={fileInputRef} 
-                    onChange={handleFileUpload} 
+                    onChange={handleLocalUpload} 
                     className="hidden" 
                     accept=".pdf,.docx,.txt,.md"
                 />
                 
-                {/* Multi-Source Attachment Wrapper */}
+                {/* Multi-Source Universal Picker Menu */}
                 <div className="relative">
                     <button 
                         onClick={() => setShowAttachMenu(!showAttachMenu)}
@@ -185,27 +193,49 @@ export default function ChatInterface({ onInsightAdded }) {
                         {showAttachMenu ? <X size={20} /> : <Paperclip size={20} />}
                     </button>
 
-                    {/* Pop-up Menu */}
                     {showAttachMenu && (
-                        <div className="absolute bottom-12 left-0 w-56 bg-gray-900 border border-glassBorder rounded-xl shadow-2xl overflow-hidden z-20 flex flex-col">
+                        <div className="absolute bottom-12 left-0 w-64 bg-gray-900 border border-glassBorder rounded-xl shadow-2xl overflow-hidden z-20 flex flex-col">
+                            
+                            {/* Section 1: Device & Platform */}
+                            <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-black/40">
+                                My Files
+                            </div>
                             <button 
                                 onClick={() => { setShowAttachMenu(false); fileInputRef.current?.click(); }}
                                 className="flex items-center gap-3 px-4 py-3 hover:bg-white/10 text-sm text-left transition text-gray-200 hover:text-white">
-                                <FileUp size={18} className="text-blue-400" />
-                                Upload from Device
+                                <FileUp size={18} className="text-gray-400" />
+                                Local Device Storage
                             </button>
                             <button 
-                                onClick={handleMyStorageImport}
+                                onClick={handlePlatformStorageImport}
                                 className="flex items-center gap-3 px-4 py-3 hover:bg-white/10 text-sm text-left transition border-t border-glassBorder text-gray-200 hover:text-white">
                                 <HardDrive size={18} className="text-emerald-400" />
-                                Select from Storage
+                                SmartSphere Cloud
                             </button>
+
+                            {/* Section 2: Third-Party Clouds */}
+                            <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-black/40 border-t border-glassBorder">
+                                External Drives
+                            </div>
                             <button 
-                                onClick={handleDriveImport}
+                                onClick={handleGoogleDriveImport}
                                 className="flex items-center gap-3 px-4 py-3 hover:bg-white/10 text-sm text-left transition border-t border-glassBorder text-gray-200 hover:text-white">
                                 <Cloud size={18} className="text-amber-400" />
-                                Import from Google Drive
+                                Google Drive
                             </button>
+                            <button 
+                                onClick={handleOneDriveImport}
+                                className="flex items-center gap-3 px-4 py-3 hover:bg-white/10 text-sm text-left transition border-t border-glassBorder text-gray-200 hover:text-white">
+                                <Cloud size={18} className="text-blue-500" />
+                                Microsoft OneDrive
+                            </button>
+                            <button 
+                                onClick={handleDropboxImport}
+                                className="flex items-center gap-3 px-4 py-3 hover:bg-white/10 text-sm text-left transition border-t border-glassBorder text-gray-200 hover:text-white">
+                                <Box size={18} className="text-blue-400" />
+                                Dropbox
+                            </button>
+
                         </div>
                     )}
                 </div>
