@@ -1,7 +1,12 @@
 import { useNavigate } from "react-router-dom";
 import {
-  LayoutDashboard, Cloud, FileText,
-  BrainCircuit, HardDrive
+  LayoutDashboard,
+  Cloud,
+  FileText,
+  Bot,
+  Settings,
+  LogOut,
+  HardDrive
 } from "lucide-react";
 
 export default function MainLayout({ children }) {
@@ -12,42 +17,88 @@ export default function MainLayout({ children }) {
 
       {/* SIDEBAR */}
       <aside className="w-64 bg-white/5 border-r border-white/10 flex flex-col">
+
+        {/* LOGO */}
         <div className="p-6 border-b border-white/10">
           <h1 className="text-xl font-bold text-blue-400">SmartSphere</h1>
           <p className="text-xs text-gray-400">AI Workspace</p>
         </div>
 
-        <nav className="flex-1 p-4 space-y-2">
+        {/* NAVIGATION */}
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
 
+          {/* DASHBOARD */}
           <NavItem
             icon={<LayoutDashboard size={18} />}
             label="Dashboard"
             onClick={() => navigate('/dashboard')}
           />
 
+          {/* DOCHUB */}
           <NavItem
             icon={<FileText size={18} />}
             label="DocHub"
             onClick={() => navigate('/dochub')}
           />
 
+          {/* 🔥 CLOUD HUB */}
+          <div className="pt-4 pb-2">
+            <p className="text-xs text-gray-500 uppercase px-2">
+              Cloud Hub
+            </p>
+          </div>
+
           <NavItem
-            icon={<Cloud size={18} />}
+            icon={<Cloud size={18} className="text-blue-400" />}
             label="Google Drive"
             onClick={() => navigate('/cloudhub/google')}
           />
 
+          {/* FUTURE CLOUDS */}
           <NavItem
-            icon={<BrainCircuit size={18} />}
-            label="AI Insights"
+            icon={<Cloud size={18} className="text-indigo-400" />}
+            label="OneDrive"
           />
 
           <NavItem
-            icon={<HardDrive size={18} />}
-            label="Storage"
+            icon={<Cloud size={18} className="text-purple-400" />}
+            label="Dropbox"
+          />
+
+          {/* 🔥 BUDDYBOT */}
+          <div className="pt-4 pb-2">
+            <p className="text-xs text-gray-500 uppercase px-2">
+              AI
+            </p>
+          </div>
+
+          <NavItem
+            icon={<Bot size={18} className="text-emerald-400" />}
+            label="BuddyBot"
           />
 
         </nav>
+
+        {/* 🔥 BOTTOM SECTION */}
+        <div className="p-4 border-t border-white/10 space-y-2">
+
+          <NavItem
+            icon={<Settings size={18} />}
+            label="Settings"
+          />
+
+          <NavItem
+            icon={<LogOut size={18} />}
+            label="Logout"
+            className="text-red-400 hover:text-red-300"
+            onClick={() => {
+              localStorage.removeItem('sphere_token');
+              navigate('/auth');
+            }}
+          />
+
+        </div>
+
       </aside>
 
       {/* MAIN CONTENT */}
@@ -59,11 +110,12 @@ export default function MainLayout({ children }) {
   );
 }
 
-function NavItem({ icon, label, onClick }) {
+// COMPONENT
+function NavItem({ icon, label, onClick, className = "" }) {
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-gray-400 hover:bg-white/10 hover:text-white transition"
+      className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg text-gray-400 hover:bg-white/10 hover:text-white transition ${className}`}
     >
       {icon}
       <span className="text-sm">{label}</span>
