@@ -52,13 +52,28 @@ const upload = multer({ storage });
 // GET ALL FILES
 router.get('/', verifyToken, async (req, res) => {
     try {
-        const { folderId } = req.query;
+        const { folderId, isTrashed, isFavorite, all } = req.query;
 
-        const docs = await Insight.find({
-            userId: req.user.id,
-            folderId: folderId || null,
-            isTrashed: false
-        }).sort({ type: -1, createdAt: -1 });
+        let query = { userId: req.user.id };
+
+        // Handle Trashed filter
+        if (isTrashed === 'true') {
+            query.isTrashed = true;
+        } else {
+            query.isTrashed = false;
+        }
+
+        // Handle Favorite filter
+        if (isFavorite === 'true') {
+            query.isFavorite = true;
+        }
+
+        // If 'all' is true, bypass folderId completely to get a flat list
+        if (all !== 'true' && folderId !== undefined) {
+            query.folderId = folderId || null;
+        }
+
+        const docs = await Insight.find(query).sort({ type: -1, createdAt: -1 });
 
         res.json(docs);
     } catch (err) {
@@ -154,7 +169,7 @@ router.get('/search', verifyToken, async (req, res) => {
     }
 });
 
-// DOWNLOAD FILE (Added to support the frontend Right-Click menu)
+// DOWNLOAD FILE
 router.get('/download/:id', verifyToken, async (req, res) => {
     try {
         const doc = await Insight.findOne({
@@ -166,12 +181,10 @@ router.get('/download/:id', verifyToken, async (req, res) => {
             return res.status(404).json({ message: 'File not found' });
         }
 
-        // If file exists physically on disk (from multer upload)
         if (doc.filePath && fs.existsSync(doc.filePath)) {
             return res.download(doc.filePath, doc.filename);
         } 
         
-        // If file is stored as raw text content in the DB
         if (doc.content !== undefined) {
             res.setHeader('Content-disposition', 'attachment; filename=' + (doc.filename || 'document.txt'));
             res.setHeader('Content-type', doc.mimeType || 'text/plain');
@@ -197,7 +210,7 @@ router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
         }
 
         const mimeType = file.mimetype;
-        const folderId = req.body.folderId; // Extract folderId from form data
+        const folderId = req.body.folderId; 
 
         const doc = await Insight.create({
             userId: req.user.id,
@@ -271,13 +284,15 @@ router.get('/:id', verifyToken, async (req, res) => {
 // UPDATE/RENAME FILE
 router.put('/:id', verifyToken, async (req, res) => {
     try {
-        const { content, name } = req.body;
+        const { content, name, isFavorite, isTrashed } = req.body;
         let updateData = {};
 
         // Handle rename
-        if (name) {
-            updateData.filename = name;
-        }
+        if (name) updateData.filename = name;
+
+        // Handle Favorites and Trash toggles
+        if (isFavorite !== undefined) updateData.isFavorite = isFavorite;
+        if (isTrashed !== undefined) updateData.isTrashed = isTrashed;
 
         // Handle content update
         if (content !== undefined) {
