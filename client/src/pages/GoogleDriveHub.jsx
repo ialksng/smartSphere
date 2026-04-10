@@ -1,29 +1,31 @@
 // client/src/pages/GoogleDriveHub.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Cloud, FileText, Loader2, ArrowLeft, Search } from 'lucide-react';
+import { Cloud, FileText, Loader2, ArrowLeft, Search, AlertCircle } from 'lucide-react';
 
 export default function GoogleDriveHub() {
     const navigate = useNavigate();
     const [driveFiles, setDriveFiles] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [importingFileId, setImportingFileId] = useState(null);
+    const [isConnected, setIsConnected] = useState(false); // NEW STATE
 
     useEffect(() => {
         // 1. Check for URL parameters from OAuth redirect
         const urlParams = new URLSearchParams(window.location.search);
         const cloudStatus = urlParams.get('cloud');
+        const errorMsg = urlParams.get('msg'); // NEW: Get actual error message
 
         if (cloudStatus) {
             if (cloudStatus === 'success') {
                 alert('Successfully connected to Google Drive!');
             } else if (cloudStatus === 'error') {
-                alert('Failed to connect to Google Drive. Check server logs.');
+                alert(`Failed to connect to Google Drive.\n\nReason: ${errorMsg || 'Check server logs.'}`);
             }
             window.history.replaceState({}, document.title, window.location.pathname);
         }
 
-        // 2. Fetch files or trigger login
+        // 2. Fetch files
         fetchDriveData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -38,20 +40,33 @@ export default function GoogleDriveHub() {
             if (res.ok) {
                 const files = await res.json();
                 setDriveFiles(files);
+                setIsConnected(true); // User is connected
             } else if (res.status === 401) {
-                // Not connected -> Redirect to Google OAuth
-                const token = localStorage.getItem('sphere_token');
-                if (!token) return;
-                const payload = JSON.parse(atob(token.split('.')[1]));
-                const userId = payload.id;
-
-                const authRes = await fetch(`/projects/smartsphere/api/cloud/google/auth?userId=${userId}`);
-                const authData = await authRes.json();
-                if (authData.url) window.location.href = authData.url;
+                // IMPORTANT: Do NOT automatically redirect here anymore!
+                setIsConnected(false); 
             }
         } catch (error) {
             console.error("Failed to fetch Google Drive files", error);
+            setIsConnected(false);
         } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // NEW: Manual connect function
+    const handleConnectDrive = async () => {
+        setIsLoading(true);
+        try {
+            const token = localStorage.getItem('sphere_token');
+            if (!token) return;
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const userId = payload.id;
+
+            const authRes = await fetch(`/projects/smartsphere/api/cloud/google/auth?userId=${userId}`);
+            const authData = await authRes.json();
+            if (authData.url) window.location.href = authData.url;
+        } catch (error) {
+            console.error("Failed to initiate auth", error);
             setIsLoading(false);
         }
     };
@@ -111,7 +126,19 @@ export default function GoogleDriveHub() {
                     {isLoading ? (
                         <div className="flex flex-col items-center justify-center h-64 text-blue-400">
                             <Loader2 className="animate-spin mb-4" size={40} />
-                            <p className="text-gray-400">Syncing with Google Drive...</p>
+                            <p className="text-gray-400">Loading...</p>
+                        </div>
+                    ) : !isConnected ? (
+                        // NEW: Manual Connect UI
+                        <div className="flex flex-col items-center justify-center h-64 text-gray-300">
+                            <AlertCircle size={48} className="mb-4 text-blue-400 opacity-80" />
+                            <p className="mb-6 text-center max-w-md">Your Google Drive is not connected. Connect your account to import files and analyze them with AI.</p>
+                            <button 
+                                onClick={handleConnectDrive}
+                                className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition"
+                            >
+                                Connect Google Drive
+                            </button>
                         </div>
                     ) : driveFiles.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-64 text-gray-500">

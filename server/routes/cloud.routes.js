@@ -42,13 +42,16 @@ router.get('/google/callback', async (req, res) => {
 
         console.log(`Successfully connected Google Drive for User: ${userId}`);
         
-        // --- UPDATED REDIRECT URL ---
+        // --- SUCCESS REDIRECT ---
         res.redirect('https://www.ialksng.me/projects/smartsphere/cloudhub/google?cloud=success');
         
     } catch (error) {
         console.error('Google OAuth Error:', error);
-        // --- UPDATED REDIRECT URL ---
-        res.redirect('https://www.ialksng.me/projects/smartsphere/cloudhub/google?cloud=error');
+        
+        // --- UPDATED: ERROR REDIRECT WITH MESSAGE ---
+        // Grab the error message (or a default) and encode it for the URL
+        const errMsg = encodeURIComponent(error.message || 'Unknown server error');
+        res.redirect(`https://www.ialksng.me/projects/smartsphere/cloudhub/google?cloud=error&msg=${errMsg}`);
     }
 });
 
