@@ -97,6 +97,26 @@ export default function Dashboard() {
         fetchInsights();
     }, []);
 
+    // --- NEW: Handle OAuth Redirect URL Parameters ---
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const cloudStatus = urlParams.get('cloud');
+
+        if (cloudStatus) {
+            if (cloudStatus === 'success') {
+                alert('Successfully connected to Google Drive!');
+                // Open the modal immediately to show files upon successful return
+                handleGoogleDriveClick();
+            } else if (cloudStatus === 'error') {
+                alert('Failed to connect to Google Drive. Please check your backend server logs.');
+            }
+
+            // Clean up the URL so it doesn't re-trigger on a normal page refresh
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     return (
         <div className="h-screen w-full bg-darkBg text-white flex overflow-hidden relative">
             <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none"></div>
