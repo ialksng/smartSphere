@@ -42,7 +42,7 @@ export default function MainLayout({ children }) {
 
           {/* MY STORAGE */}
           <NavItem
-            icon={<FileText size={18} />}
+            icon={<HardDrive size={18} />}
             label="MyStorage"
             onClick={() => navigate('/mystorage')}
           />

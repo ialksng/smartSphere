@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, Loader2, FileText, FileUp, HardDrive, Cloud, X, Box, ChevronRight, Folder, ArrowLeft } from 'lucide-react';
+import { Send, Paperclip, Loader2, FileText, FileUp, HardDrive, Cloud, X, Box, ChevronRight, Folder } from 'lucide-react';
 
 export default function ChatInterface({ onInsightAdded }) {
     const [messages, setMessages] = useState([]);
@@ -131,8 +131,7 @@ export default function ChatInterface({ onInsightAdded }) {
             { role: 'user', type: 'file', fileName: file.filename, text: `Attached from Storage: ${file.filename}`, isSystem: true },
             { role: 'ai', text: `I've acknowledged **${file.filename}** from your SmartSphere storage. What would you like to know about it?` }
         ]);
-        // Note: For this to feed RAG, ensure DocHub items sync with your Insight database, 
-        // or add logic to extract the DocHub content and send it to /api/ai/chat.
+        // To feed this file into the AI's context, ensure DocHub items are accessible to your /api/ai/chat RAG system
     };
 
     // --- 3. GOOGLE DRIVE LOGIC ---
@@ -208,7 +207,6 @@ export default function ChatInterface({ onInsightAdded }) {
         }
     };
 
-    // --- UI HELPERS ---
     const toggleAttachMenu = () => {
         setShowAttachMenu(!showAttachMenu);
         setShowCloudMenu(false); 
@@ -217,11 +215,10 @@ export default function ChatInterface({ onInsightAdded }) {
     return (
         <div className="flex flex-col h-full w-full bg-glassBg backdrop-blur-xl border border-glassBorder rounded-2xl shadow-2xl overflow-hidden text-white relative">
             
-            {/* --- MODALS OVERLAYS --- */}
-            {/* MyStorage Modal */}
+            {/* --- FIXED MODALS OVERLAYS (Ensures they sit on top of everything) --- */}
             {isMyStorageModalOpen && (
-                <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-[#0b0f19] border border-glassBorder rounded-2xl w-full max-w-md h-[70%] flex flex-col overflow-hidden shadow-2xl">
+                <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-[#0b0f19] border border-glassBorder rounded-2xl w-full max-w-md h-[70vh] flex flex-col overflow-hidden shadow-2xl">
                         <div className="p-4 border-b border-glassBorder flex items-center justify-between bg-white/5">
                             <h3 className="font-semibold flex items-center gap-2"><HardDrive size={18} className="text-emerald-400"/> Select from Storage</h3>
                             <button onClick={() => setIsMyStorageModalOpen(false)} className="text-gray-400 hover:text-white"><X size={20}/></button>
@@ -244,10 +241,9 @@ export default function ChatInterface({ onInsightAdded }) {
                 </div>
             )}
 
-            {/* Google Drive Modal */}
             {isDriveModalOpen && (
-                <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-[#0b0f19] border border-glassBorder rounded-2xl w-full max-w-lg h-[80%] flex flex-col overflow-hidden shadow-2xl">
+                <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-[#0b0f19] border border-glassBorder rounded-2xl w-full max-w-lg h-[80vh] flex flex-col overflow-hidden shadow-2xl">
                         <div className="p-4 border-b border-glassBorder flex items-center justify-between bg-white/5">
                             <h3 className="font-semibold flex items-center gap-2"><Cloud size={18} className="text-amber-400"/> Google Drive Picker</h3>
                             <button onClick={() => setIsDriveModalOpen(false)} className="text-gray-400 hover:text-white"><X size={20}/></button>
@@ -294,7 +290,6 @@ export default function ChatInterface({ onInsightAdded }) {
                 </div>
             )}
             {/* --- END MODALS --- */}
-
 
             {/* Main Chat Header */}
             <div className="p-4 border-b border-glassBorder bg-white/5 flex justify-between items-center">
