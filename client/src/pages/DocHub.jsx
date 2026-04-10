@@ -8,6 +8,7 @@ const DocHub = () => {
   const [currentFolder, setCurrentFolder] = useState(null);
   const [folderStack, setFolderStack] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [menu, setMenu] = useState(null);
 
   const editor = useEditor({
     extensions: [StarterKit],
@@ -17,6 +18,12 @@ const DocHub = () => {
   useEffect(() => {
     fetchItems();
   }, [currentFolder]);
+
+  useEffect(() => {
+    const closeMenu = () => setMenu(null);
+    window.addEventListener("click", closeMenu);
+    return () => window.removeEventListener("click", closeMenu);
+  }, []);
 
   const fetchItems = async () => {
     const res = await fetch(`/projects/smartsphere/api/dochub?parentId=${currentFolder || ''}`, {
@@ -118,9 +125,50 @@ const DocHub = () => {
       });
 
       alert("Uploaded to Google Drive");
-    } catch (err) {
+    } catch {
       alert("Upload failed");
     }
+  };
+
+  const handleRightClick = (e, item) => {
+    e.preventDefault();
+    setMenu({
+      x: e.pageX,
+      y: e.pageY,
+      item
+    });
+  };
+
+  const renameItem = async () => {
+    const name = prompt("New name", menu.item.filename);
+    if (!name) return;
+
+    await fetch(`/projects/smartsphere/api/dochub/${menu.item._id}/rename`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
+      },
+      body: JSON.stringify({ name })
+    });
+
+    setMenu(null);
+    fetchItems();
+  };
+
+  const deleteItem = async () => {
+    if (!window.confirm("Delete this item?")) return;
+
+    await fetch(`/projects/smartsphere/api/dochub/${menu.item._id}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
+      }
+    });
+
+    setMenu(null);
+    setSelectedFile(null);
+    fetchItems();
   };
 
   return (
@@ -145,6 +193,7 @@ const DocHub = () => {
             <div
               key={item._id}
               onClick={() => item.type === 'folder' ? openFolder(item._id) : openFile(item._id)}
+              onContextMenu={(e) => handleRightClick(e, item)}
               className="flex items-center gap-2 p-2 cursor-pointer hover:bg-white/10 rounded"
             >
               {item.type === 'folder'
@@ -190,6 +239,26 @@ const DocHub = () => {
         )}
 
       </div>
+
+      {menu && (
+        <div
+          style={{ top: menu.y, left: menu.x }}
+          className="fixed bg-black border border-white/10 rounded shadow-lg z-50"
+        >
+          <div
+            onClick={renameItem}
+            className="px-4 py-2 hover:bg-white/10 cursor-pointer text-sm"
+          >
+            Rename
+          </div>
+          <div
+            onClick={deleteItem}
+            className="px-4 py-2 hover:bg-red-500/20 cursor-pointer text-sm text-red-400"
+          >
+            Delete
+          </div>
+        </div>
+      )}
 
     </div>
   );

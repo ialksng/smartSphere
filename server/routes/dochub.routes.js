@@ -93,6 +93,22 @@ router.put('/:id', verifyToken, async (req, res) => {
     }
 });
 
+router.patch('/:id/rename', verifyToken, async (req, res) => {
+    try {
+        const { name } = req.body;
+
+        const updated = await Insight.findOneAndUpdate(
+            { _id: req.params.id, userId: req.user.id },
+            { filename: name },
+            { new: true }
+        );
+
+        res.json(updated);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
 router.delete('/:id', verifyToken, async (req, res) => {
     try {
         await Insight.deleteMany({
