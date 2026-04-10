@@ -2,10 +2,11 @@ const express = require('express');
 const { google } = require('googleapis');
 const fs = require('fs');
 const User = require('../models/User');
+const Insight = require('../models/Insight');
+const Folder = require('../models/Folder'); // Added Folder model
 const { verifyToken } = require('../middleware/auth.middleware');
 const { extractTextFromBuffer } = require('../services/document.service');
 const { analyzeText } = require('../services/ai.service');
-const Insight = require('../models/Insight');
 
 const router = express.Router();
 
@@ -98,7 +99,8 @@ router.get('/google/files', verifyToken, async (req, res) => {
 
 router.post('/google/import', verifyToken, async (req, res) => {
     try {
-        const { fileId, fileName, mimeType } = req.body;
+        // ADDED folderId so imported files go to the correct local folder
+        const { fileId, fileName, mimeType, folderId } = req.body;
 
         const user = await User.findById(req.user.id);
 
@@ -149,6 +151,7 @@ router.post('/google/import', verifyToken, async (req, res) => {
 
         const newInsight = new Insight({
             userId: req.user.id,
+            folderId: folderId || null, // SAVES TO THE CURRENT FOLDER
             filename: fileName,
             fileType: finalMimeType,
             content: cleanText,
@@ -172,17 +175,13 @@ router.post('/google/import', verifyToken, async (req, res) => {
     }
 });
 
-router.post('/google/upload-dochub', verifyToken, async (req, res) => {
+// CHANGED: Replaced /google/upload-dochub with /google/upload-local
+// Now smartly handles exporting both single files and entire local folders
+router.post('/google/upload-local', verifyToken, async (req, res) => {
     try {
-        const { fileId } = req.body;
-
-        const file = await Insight.findById(fileId);
+        const { itemId, type } = req.body;
+        
         const user = await User.findById(req.user.id);
-
-        if (!file || file.userId.toString() !== req.user.id) {
-            return res.status(404).json({ message: 'File not found' });
-        }
-
         if (!user?.googleTokens) {
             return res.status(401).json({ message: 'Google Drive not connected' });
         }
@@ -190,27 +189,82 @@ router.post('/google/upload-dochub', verifyToken, async (req, res) => {
         oauth2Client.setCredentials(user.googleTokens);
         const drive = google.drive({ version: 'v3', auth: oauth2Client });
 
-        const mimeType = file.mimeType || 'text/plain';
-
-        const response = await drive.files.create({
-            requestBody: {
-                name: file.filename,
-                mimeType
-            },
-            media: {
-                mimeType,
-                body: file.content || ''
+        // EXPORT A SINGLE FILE
+        if (type === 'file') {
+            const file = await Insight.findById(itemId);
+            
+            if (!file || file.userId.toString() !== req.user.id) {
+                return res.status(404).json({ message: 'File not found' });
             }
-        });
 
-        await Insight.findByIdAndUpdate(fileId, {
-            driveFileId: response.data.id,
-            fileUrl: `https://drive.google.com/file/d/${response.data.id}/view`,
-            source: 'google_drive'
-        });
+            const mimeType = file.fileType || file.mimeType || 'text/plain';
 
-        res.json({ message: 'Upload successful', file: response.data });
-    } catch {
+            const response = await drive.files.create({
+                requestBody: {
+                    name: file.filename || file.name,
+                    mimeType
+                },
+                media: {
+                    mimeType,
+                    body: file.content || ''
+                }
+            });
+
+            await Insight.findByIdAndUpdate(itemId, {
+                driveFileId: response.data.id,
+                fileUrl: `https://drive.google.com/file/d/${response.data.id}/view`,
+                source: 'google_drive'
+            });
+
+            return res.json({ message: 'File successfully uploaded to Google Drive', file: response.data });
+        } 
+        
+        // EXPORT AN ENTIRE FOLDER
+        if (type === 'folder') {
+            const folder = await Folder.findById(itemId);
+            
+            if (!folder || folder.userId.toString() !== req.user.id) {
+                return res.status(404).json({ message: 'Folder not found' });
+            }
+
+            // 1. Create the Folder directly inside Google Drive
+            const driveFolder = await drive.files.create({
+                requestBody: {
+                    name: folder.name,
+                    mimeType: 'application/vnd.google-apps.folder'
+                },
+                fields: 'id'
+            });
+
+            const driveFolderId = driveFolder.data.id;
+
+            // 2. Fetch all local files stored inside this folder
+            const files = await Insight.find({ userId: req.user.id, folderId: folder._id });
+
+            // 3. Loop through and upload all files directly into the newly created Drive Folder
+            for (const f of files) {
+                const mimeType = f.fileType || f.mimeType || 'text/plain';
+                
+                await drive.files.create({
+                    requestBody: {
+                        name: f.filename || f.name,
+                        mimeType,
+                        parents: [driveFolderId] // Connects the file to the Google Drive Folder
+                    },
+                    media: {
+                        mimeType,
+                        body: f.content || ''
+                    }
+                });
+            }
+
+            return res.json({ message: 'Folder and contents successfully exported to Google Drive', folderId: driveFolderId });
+        }
+
+        res.status(400).json({ message: 'Invalid export type specified.' });
+
+    } catch (error) {
+        console.error("Cloud Upload Error:", error);
         res.status(500).json({ message: 'Upload failed' });
     }
 });

@@ -49,13 +49,14 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
+// GET ALL FILES
 router.get('/', verifyToken, async (req, res) => {
     try {
-        const { parentId } = req.query;
+        const { folderId } = req.query;
 
         const docs = await Insight.find({
             userId: req.user.id,
-            parentId: parentId || null,
+            folderId: folderId || null,
             isTrashed: false
         }).sort({ type: -1, createdAt: -1 });
 
@@ -65,6 +66,7 @@ router.get('/', verifyToken, async (req, res) => {
     }
 });
 
+// SEARCH FILES
 router.get('/search', verifyToken, async (req, res) => {
     try {
         const { q } = req.query;
@@ -152,6 +154,37 @@ router.get('/search', verifyToken, async (req, res) => {
     }
 });
 
+// DOWNLOAD FILE (Added to support the frontend Right-Click menu)
+router.get('/download/:id', verifyToken, async (req, res) => {
+    try {
+        const doc = await Insight.findOne({
+            _id: req.params.id,
+            userId: req.user.id
+        });
+
+        if (!doc) {
+            return res.status(404).json({ message: 'File not found' });
+        }
+
+        // If file exists physically on disk (from multer upload)
+        if (doc.filePath && fs.existsSync(doc.filePath)) {
+            return res.download(doc.filePath, doc.filename);
+        } 
+        
+        // If file is stored as raw text content in the DB
+        if (doc.content !== undefined) {
+            res.setHeader('Content-disposition', 'attachment; filename=' + (doc.filename || 'document.txt'));
+            res.setHeader('Content-type', doc.mimeType || 'text/plain');
+            return res.send(doc.content);
+        }
+
+        res.status(404).json({ message: 'File content not found on server' });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// UPLOAD FILE
 router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
     try {
         const file = req.file;
@@ -164,6 +197,7 @@ router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
         }
 
         const mimeType = file.mimetype;
+        const folderId = req.body.folderId; // Extract folderId from form data
 
         const doc = await Insight.create({
             userId: req.user.id,
@@ -174,7 +208,8 @@ router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
             fileType: path.extname(file.originalname),
             mimeType,
             contentType: getContentType(mimeType),
-            source: 'local'
+            source: 'local',
+            folderId: folderId || null
         });
 
         res.json(doc);
@@ -183,29 +218,12 @@ router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
     }
 });
 
-router.post('/folder', verifyToken, async (req, res) => {
-    try {
-        const { name, parentId } = req.body;
-
-        const folder = await Insight.create({
-            userId: req.user.id,
-            filename: name,
-            type: 'folder',
-            parentId: parentId || null
-        });
-
-        res.json(folder);
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
-});
-
+// CREATE EMPTY FILE
 router.post('/file', verifyToken, async (req, res) => {
     try {
-        const { filename, content, parentId } = req.body;
+        const { filename, content, folderId } = req.body;
 
         const size = Buffer.byteLength(content || '', 'utf8');
-
         const allowed = await checkStorage(req.user.id, size);
 
         if (!allowed) {
@@ -217,7 +235,7 @@ router.post('/file', verifyToken, async (req, res) => {
             filename,
             content: content || "",
             type: 'file',
-            parentId: parentId || null,
+            folderId: folderId || null,
             size,
             contentType: 'text'
         });
@@ -228,6 +246,7 @@ router.post('/file', verifyToken, async (req, res) => {
     }
 });
 
+// GET SINGLE FILE
 router.get('/:id', verifyToken, async (req, res) => {
     try {
         const doc = await Insight.findOne({
@@ -249,20 +268,32 @@ router.get('/:id', verifyToken, async (req, res) => {
     }
 });
 
+// UPDATE/RENAME FILE
 router.put('/:id', verifyToken, async (req, res) => {
     try {
-        const content = req.body.content || "";
-        const size = Buffer.byteLength(content, 'utf8');
+        const { content, name } = req.body;
+        let updateData = {};
 
-        const allowed = await checkStorage(req.user.id, size);
+        // Handle rename
+        if (name) {
+            updateData.filename = name;
+        }
 
-        if (!allowed) {
-            return res.status(400).json({ message: "Storage limit exceeded (500MB)" });
+        // Handle content update
+        if (content !== undefined) {
+            const size = Buffer.byteLength(content, 'utf8');
+            const allowed = await checkStorage(req.user.id, size);
+
+            if (!allowed) {
+                return res.status(400).json({ message: "Storage limit exceeded (500MB)" });
+            }
+            updateData.content = content;
+            updateData.size = size;
         }
 
         const updated = await Insight.findOneAndUpdate(
             { _id: req.params.id, userId: req.user.id },
-            { content, size },
+            updateData,
             { new: true }
         );
 
@@ -272,29 +303,14 @@ router.put('/:id', verifyToken, async (req, res) => {
     }
 });
 
-router.patch('/:id/rename', verifyToken, async (req, res) => {
-    try {
-        const { name } = req.body;
-
-        const updated = await Insight.findOneAndUpdate(
-            { _id: req.params.id, userId: req.user.id },
-            { filename: name },
-            { new: true }
-        );
-
-        res.json(updated);
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
-});
-
+// MOVE FILE
 router.patch('/:id/move', verifyToken, async (req, res) => {
     try {
-        const { parentId } = req.body;
+        const { folderId } = req.body;
 
         const updated = await Insight.findOneAndUpdate(
             { _id: req.params.id, userId: req.user.id },
-            { parentId: parentId || null },
+            { folderId: folderId || null },
             { new: true }
         );
 
@@ -304,20 +320,38 @@ router.patch('/:id/move', verifyToken, async (req, res) => {
     }
 });
 
-router.delete('/:id', verifyToken, async (req, res) => {
+// MOVE TO TRASH
+router.put('/:id/trash', verifyToken, async (req, res) => {
     try {
         await Insight.updateMany(
             {
                 userId: req.user.id,
                 $or: [
                     { _id: req.params.id },
-                    { parentId: req.params.id }
+                    { folderId: req.params.id }
                 ]
             },
             { isTrashed: true }
         );
 
         res.json({ message: 'Moved to trash' });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// PERMANENT DELETE
+router.delete('/:id', verifyToken, async (req, res) => {
+    try {
+        await Insight.deleteMany({
+            userId: req.user.id,
+            $or: [
+                { _id: req.params.id },
+                { folderId: req.params.id }
+            ]
+        });
+
+        res.json({ message: 'Deleted permanently' });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }

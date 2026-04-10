@@ -25,6 +25,25 @@ export default function ChatInterface({ onInsightAdded }) {
     const fileInputRef = useRef(null);
     const messagesEndRef = useRef(null);
 
+    // --- FETCH CHAT HISTORY ON LOAD ---
+    useEffect(() => {
+        const fetchHistory = async () => {
+            try {
+                const res = await fetch('/projects/smartsphere/api/ai/chat/history', {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('sphere_token')}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.length > 0) setMessages(data);
+                }
+            } catch (err) {
+                console.error("Failed to load chat history", err);
+            }
+        };
+        fetchHistory();
+    }, []);
+
+    // --- AUTO-SCROLL ---
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
@@ -40,7 +59,8 @@ export default function ChatInterface({ onInsightAdded }) {
         setIsLoading(true);
 
         try {
-            const cleanHistory = newHistory.filter(msg => !msg.isSystem).slice(-6);
+            // Keep the last 15 messages for AI context to avoid payload limits
+            const cleanHistory = newHistory.filter(msg => !msg.isSystem).slice(-15);
 
             const res = await fetch('/projects/smartsphere/api/ai/chat', {
                 method: 'POST',
@@ -131,7 +151,6 @@ export default function ChatInterface({ onInsightAdded }) {
             { role: 'user', type: 'file', fileName: file.filename, text: `Attached from Storage: ${file.filename}`, isSystem: true },
             { role: 'ai', text: `I've acknowledged **${file.filename}** from your SmartSphere storage. What would you like to know about it?` }
         ]);
-        // To feed this file into the AI's context, ensure DocHub items are accessible to your /api/ai/chat RAG system
     };
 
     // --- 3. GOOGLE DRIVE LOGIC ---
@@ -215,7 +234,7 @@ export default function ChatInterface({ onInsightAdded }) {
     return (
         <div className="flex flex-col h-full w-full bg-glassBg backdrop-blur-xl border border-glassBorder rounded-2xl shadow-2xl overflow-hidden text-white relative">
             
-            {/* --- FIXED MODALS OVERLAYS (Ensures they sit on top of everything) --- */}
+            {/* --- FIXED MODALS OVERLAYS --- */}
             {isMyStorageModalOpen && (
                 <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-[#0b0f19] border border-glassBorder rounded-2xl w-full max-w-md h-[70vh] flex flex-col overflow-hidden shadow-2xl">

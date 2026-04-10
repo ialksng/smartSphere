@@ -47,16 +47,15 @@ const insightSchema = new mongoose.Schema({
     index: true
   },
 
-  parentId: {
+  folderId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Insight',
+    ref: 'Folder',
     default: null,
     index: true
   },
 
   source: {
     type: String,
-    enum: ['local', 'google_drive', 'onedrive'],
     default: 'local',
     index: true
   },
