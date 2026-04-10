@@ -14,7 +14,6 @@ app.use(cors());
 app.use(express.json());
 
 // --- API ROUTING CONFIGURATION ---
-// Create a unified router for all API endpoints
 const apiRouter = express.Router();
 
 apiRouter.use('/auth', require('./routes/auth.routes'));
@@ -24,28 +23,23 @@ apiRouter.get('/health', (req, res) => {
     res.json({ status: 'ok', message: 'Smart Sphere API is running' });
 });
 
-// CRITICAL FIX: Mount the API router on BOTH paths.
-// This ensures that when Google redirects back to your custom domain
-// (ialksng.me/projects/smartsphere/api/cloud/google/callback), 
-// the Express backend catches it before the React frontend tries to render a blank page.
+// MOUNT ON BOTH PATHS:
+// 1. /api for standard frontend calls
+// 2. /projects/smartsphere/api to catch the Google OAuth redirect on your custom domain
 app.use('/api', apiRouter);
 app.use('/projects/smartsphere/api', apiRouter); 
-// --------------------------------------------------
 
+// --- STATIC FILE SERVING ---
 const clientBuildPath = path.join(__dirname, '../client/dist');
 
-// Serve the static files exactly where Vite expects them
 app.use('/projects/smartsphere', express.static(clientBuildPath));
-
-// Also serve them at the root just in case
 app.use(express.static(clientBuildPath));
 
-// Redirect the bare domain to your project path
 app.get('/', (req, res) => {
     res.redirect('/projects/smartsphere');
 });
 
-// Catch-all route needs to stay at the very bottom
+// Catch-all route for React SPA
 app.get('*', (req, res) => {
     res.sendFile(path.join(clientBuildPath, 'index.html'));
 });

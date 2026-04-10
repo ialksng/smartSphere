@@ -8,6 +8,7 @@ const Insight = require('../models/Insight');
 
 const router = express.Router();
 
+// This MUST match what is in your Google Cloud Console and your .env
 const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
@@ -36,12 +37,15 @@ router.get('/google/callback', async (req, res) => {
     try {
         if (!code) throw new Error("No authorization code provided.");
 
+        // Exchange the code for actual access/refresh tokens
         const { tokens } = await oauth2Client.getToken(code);
         
-        // --- NEW: Actually save the tokens to MongoDB! ---
+        // Save the tokens to MongoDB
         await User.findByIdAndUpdate(userId, { googleTokens: tokens });
 
         console.log(`Successfully connected Google Drive for User: ${userId}`);
+        
+        // Redirect back to your frontend dashboard on your custom domain
         res.redirect('https://www.ialksng.me/projects/smartsphere/dashboard?cloud=success');
         
     } catch (error) {
@@ -50,24 +54,18 @@ router.get('/google/callback', async (req, res) => {
     }
 });
 
-// 3. --- NEW: Fetch Google Drive Files ---
+// 3. Fetch Google Drive Files
 router.get('/google/files', verifyToken, async (req, res) => {
     try {
-        // 1. Find the user in the database
         const user = await User.findById(req.user.id);
         
-        // 2. Check if they have connected their drive
         if (!user || !user.googleTokens) {
             return res.status(401).json({ message: "Google Drive not connected." });
         }
 
-        // 3. Set the credentials for this specific user
         oauth2Client.setCredentials(user.googleTokens);
-        
-        // 4. Initialize the Google Drive API
         const drive = google.drive({ version: 'v3', auth: oauth2Client });
         
-        // 5. Fetch their 10 most recent files (ignoring folders)
         const response = await drive.files.list({
             pageSize: 10,
             fields: 'files(id, name, mimeType, modifiedTime)',
@@ -82,7 +80,7 @@ router.get('/google/files', verifyToken, async (req, res) => {
     }
 });
 
-// 4. --- NEW: Download & Import File to AI ---
+// 4. Download & Import File to AI
 router.post('/google/import', verifyToken, async (req, res) => {
     try {
         const { fileId, fileName, mimeType } = req.body;
@@ -98,16 +96,14 @@ router.post('/google/import', verifyToken, async (req, res) => {
         let fileBuffer;
         let finalMimeType = mimeType;
 
-        // Google Docs cannot be downloaded directly; they must be "exported" to text
         if (mimeType === 'application/vnd.google-apps.document') {
             const response = await drive.files.export(
                 { fileId: fileId, mimeType: 'text/plain' }, 
                 { responseType: 'arraybuffer' }
             );
             fileBuffer = Buffer.from(response.data);
-            finalMimeType = 'text/plain'; // Treat it as a standard text file now
+            finalMimeType = 'text/plain'; 
         } else {
-            // Standard files (PDFs, DOCX, TXT) can be downloaded directly
             const response = await drive.files.get(
                 { fileId: fileId, alt: 'media' }, 
                 { responseType: 'arraybuffer' }
@@ -115,22 +111,19 @@ router.post('/google/import', verifyToken, async (req, res) => {
             fileBuffer = Buffer.from(response.data);
         }
 
-        // Pass the downloaded file into your existing RAG extraction pipeline!
         const extractedText = await extractTextFromBuffer(fileBuffer, finalMimeType);
         const cleanText = extractedText.replace(/\s+/g, ' ').trim();
 
-        // Generate the AI summary
         const prompt = `Please provide a concise 2-sentence summary of the following document:\n\n${cleanText.substring(0, 3000)}`;
         const summary = await analyzeText(prompt, "You are a helpful document summarizer.");
 
-        // Save to your MongoDB Insights database
         const newInsight = new Insight({
             userId: req.user.id,
             filename: fileName,
             fileType: finalMimeType,
             content: cleanText,
             summary: summary,
-            source: 'googledrive' // Tag it so you know it came from the cloud
+            source: 'googledrive' 
         });
 
         await newInsight.save();
@@ -144,4 +137,3 @@ router.post('/google/import', verifyToken, async (req, res) => {
 });
 
 module.exports = router;
-
