@@ -7,6 +7,7 @@ const DocHub = () => {
   const [items, setItems] = useState([]);
   const [currentFolder, setCurrentFolder] = useState(null);
   const [folderStack, setFolderStack] = useState([]);
+  const [breadcrumb, setBreadcrumb] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [menu, setMenu] = useState(null);
 
@@ -68,8 +69,9 @@ const DocHub = () => {
     fetchItems();
   };
 
-  const openFolder = (id) => {
+  const openFolder = (id, name) => {
     setFolderStack(prev => [...prev, currentFolder]);
+    setBreadcrumb(prev => [...prev, { id, name }]);
     setCurrentFolder(id);
     setSelectedFile(null);
   };
@@ -77,6 +79,7 @@ const DocHub = () => {
   const goBack = () => {
     const prev = folderStack[folderStack.length - 1] || null;
     setFolderStack(stack => stack.slice(0, -1));
+    setBreadcrumb(b => b.slice(0, -1));
     setCurrentFolder(prev);
     setSelectedFile(null);
   };
@@ -132,11 +135,7 @@ const DocHub = () => {
 
   const handleRightClick = (e, item) => {
     e.preventDefault();
-    setMenu({
-      x: e.pageX,
-      y: e.pageY,
-      item
-    });
+    setMenu({ x: e.pageX, y: e.pageY, item });
   };
 
   const renameItem = async () => {
@@ -171,10 +170,60 @@ const DocHub = () => {
     fetchItems();
   };
 
+  const handleDragStart = (e, item) => {
+    e.dataTransfer.setData("itemId", item._id);
+  };
+
+  const handleDrop = async (e, folder) => {
+    e.preventDefault();
+    const itemId = e.dataTransfer.getData("itemId");
+
+    await fetch(`/projects/smartsphere/api/dochub/${itemId}/move`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
+      },
+      body: JSON.stringify({ parentId: folder._id })
+    });
+
+    fetchItems();
+  };
+
+  const allowDrop = (e) => e.preventDefault();
+
   return (
     <div className="flex h-full">
 
       <div className="w-80 border-r p-4 bg-white/5">
+
+        <div className="flex items-center gap-2 text-sm mb-4 text-gray-400 flex-wrap">
+          <span
+            className="cursor-pointer"
+            onClick={() => {
+              setCurrentFolder(null);
+              setBreadcrumb([]);
+            }}
+          >
+            Home
+          </span>
+
+          {breadcrumb.map((b, i) => (
+            <span key={b.id} className="flex items-center gap-2">
+              /
+              <span
+                className="cursor-pointer"
+                onClick={() => {
+                  const newPath = breadcrumb.slice(0, i + 1);
+                  setBreadcrumb(newPath);
+                  setCurrentFolder(b.id);
+                }}
+              >
+                {b.name}
+              </span>
+            </span>
+          ))}
+        </div>
 
         <div className="flex gap-2 mb-4">
           <button onClick={createFolder} className="px-2 py-1 bg-white/10 rounded">+ Folder</button>
@@ -192,7 +241,15 @@ const DocHub = () => {
           {items.map(item => (
             <div
               key={item._id}
-              onClick={() => item.type === 'folder' ? openFolder(item._id) : openFile(item._id)}
+              draggable={item.type === 'file'}
+              onDragStart={(e) => handleDragStart(e, item)}
+              onDrop={(e) => item.type === 'folder' && handleDrop(e, item)}
+              onDragOver={allowDrop}
+              onClick={() =>
+                item.type === 'folder'
+                  ? openFolder(item._id, item.filename)
+                  : openFile(item._id)
+              }
               onContextMenu={(e) => handleRightClick(e, item)}
               className="flex items-center gap-2 p-2 cursor-pointer hover:bg-white/10 rounded"
             >
@@ -207,7 +264,6 @@ const DocHub = () => {
       </div>
 
       <div className="flex-1 p-6 flex flex-col">
-
         {selectedFile ? (
           <>
             <div className="flex justify-between items-center mb-4">
@@ -237,7 +293,6 @@ const DocHub = () => {
             Select a file
           </div>
         )}
-
       </div>
 
       {menu && (
@@ -245,16 +300,10 @@ const DocHub = () => {
           style={{ top: menu.y, left: menu.x }}
           className="fixed bg-black border border-white/10 rounded shadow-lg z-50"
         >
-          <div
-            onClick={renameItem}
-            className="px-4 py-2 hover:bg-white/10 cursor-pointer text-sm"
-          >
+          <div onClick={renameItem} className="px-4 py-2 hover:bg-white/10 cursor-pointer text-sm">
             Rename
           </div>
-          <div
-            onClick={deleteItem}
-            className="px-4 py-2 hover:bg-red-500/20 cursor-pointer text-sm text-red-400"
-          >
+          <div onClick={deleteItem} className="px-4 py-2 hover:bg-red-500/20 cursor-pointer text-sm text-red-400">
             Delete
           </div>
         </div>

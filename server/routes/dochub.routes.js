@@ -109,6 +109,22 @@ router.patch('/:id/rename', verifyToken, async (req, res) => {
     }
 });
 
+router.patch('/:id/move', verifyToken, async (req, res) => {
+    try {
+        const { parentId } = req.body;
+
+        const updated = await Insight.findOneAndUpdate(
+            { _id: req.params.id, userId: req.user.id },
+            { parentId: parentId || null },
+            { new: true }
+        );
+
+        res.json(updated);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
 router.delete('/:id', verifyToken, async (req, res) => {
     try {
         await Insight.deleteMany({
