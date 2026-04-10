@@ -30,6 +30,28 @@ export default function Dashboard() {
         }
     };
 
+    // --- NEW: Google Drive OAuth Handler ---
+    const handleGoogleConnect = async () => {
+        try {
+            // 1. Decode the JWT to get the user's ID
+            const token = localStorage.getItem('sphere_token');
+            if (!token) return;
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const userId = payload.id;
+
+            // 2. Ask the backend for the secure Google Login URL
+            const res = await fetch(`/projects/smartsphere/api/cloud/google/auth?userId=${userId}`);
+            const data = await res.json();
+            
+            // 3. Redirect the browser to Google's consent screen
+            if (data.url) {
+                window.location.href = data.url;
+            }
+        } catch (error) {
+            console.error("Failed to initiate Google auth", error);
+        }
+    };
+
     useEffect(() => {
         fetchInsights();
     }, []);
@@ -56,7 +78,13 @@ export default function Dashboard() {
                     <div className="pt-6 pb-2">
                         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-3">Cloud Hub</p>
                     </div>
-                    <NavItem icon={<Cloud size={18} className="text-blue-400" />} label="Google Drive" badge="Connected" />
+                    {/* Wired up the Google Connect button! */}
+                    <NavItem 
+                        icon={<Cloud size={18} className="text-blue-400" />} 
+                        label="Google Drive" 
+                        badge="Connect" 
+                        onClick={handleGoogleConnect} 
+                    />
                     <NavItem icon={<Cloud size={18} className="text-blue-600" />} label="OneDrive" />
                     <NavItem icon={<HardDrive size={18} />} label="Local Storage" />
                 </nav>
@@ -137,9 +165,13 @@ export default function Dashboard() {
 }
 
 // --- Internal Helper Components ---
-function NavItem({ icon, label, active, badge }) {
+// Added the `onClick` prop so the button can actually trigger our function
+function NavItem({ icon, label, active, badge, onClick }) {
     return (
-        <button className={`flex items-center justify-between w-full px-3 py-2.5 rounded-xl transition ${active ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-gray-400 hover:bg-white/5 hover:text-white border border-transparent'}`}>
+        <button 
+            onClick={onClick} 
+            className={`flex items-center justify-between w-full px-3 py-2.5 rounded-xl transition ${active ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-gray-400 hover:bg-white/5 hover:text-white border border-transparent'}`}
+        >
             <div className="flex items-center gap-3">
                 {icon}
                 <span className="text-sm font-medium">{label}</span>
