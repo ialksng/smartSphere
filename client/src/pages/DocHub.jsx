@@ -22,18 +22,15 @@ export default function DocHub() {
         }
       });
 
-      if (!res.ok) throw new Error("Failed to fetch docs");
-
       const data = await res.json();
       setDocs(data);
 
-      // 🔥 AUTO OPEN DOC FROM DASHBOARD
       if (location.state?.docId) {
         openDoc(location.state.docId);
       }
 
     } catch (err) {
-      console.error("DocHub fetch error:", err);
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -47,49 +44,38 @@ export default function DocHub() {
         }
       });
 
-      if (!res.ok) throw new Error("Failed to fetch doc");
-
       const data = await res.json();
       setSelectedDoc(data);
       setContent(data.content || "");
 
     } catch (err) {
-      console.error("Open doc error:", err);
+      console.error(err);
     }
   };
 
   const saveDoc = async () => {
-    try {
-      await fetch(`/projects/smartsphere/api/dochub/${selectedDoc._id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
-        },
-        body: JSON.stringify({ content })
-      });
+    await fetch(`/projects/smartsphere/api/dochub/${selectedDoc._id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
+      },
+      body: JSON.stringify({ content })
+    });
 
-      alert("Saved!");
-    } catch (err) {
-      console.error(err);
-      alert("Save failed");
-    }
+    alert("Saved!");
   };
 
   const deleteDoc = async () => {
-    try {
-      await fetch(`/projects/smartsphere/api/dochub/${selectedDoc._id}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
-        }
-      });
+    await fetch(`/projects/smartsphere/api/dochub/${selectedDoc._id}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
+      }
+    });
 
-      setSelectedDoc(null);
-      fetchDocs();
-    } catch (err) {
-      console.error(err);
-    }
+    setSelectedDoc(null);
+    fetchDocs();
   };
 
   const downloadDoc = () => {
@@ -103,11 +89,11 @@ export default function DocHub() {
   };
 
   return (
-    <div className="flex h-screen bg-[#0b0f1a] text-white">
+    <div className="flex h-full">
 
-      {/* LEFT PANEL */}
-      <div className="w-80 border-r border-white/10 p-4 overflow-y-auto">
-        <h2 className="font-bold mb-4">DocHub</h2>
+      {/* LEFT SIDEBAR */}
+      <div className="w-72 border-r border-white/10 p-4 overflow-y-auto bg-white/5">
+        <h2 className="text-lg font-semibold mb-4">Documents</h2>
 
         {loading ? (
           <p className="text-gray-400 text-sm">Loading...</p>
@@ -118,37 +104,54 @@ export default function DocHub() {
             <div
               key={doc._id}
               onClick={() => openDoc(doc._id)}
-              className="p-3 rounded-lg hover:bg-white/10 cursor-pointer"
+              className={`p-3 rounded-lg cursor-pointer mb-2 transition ${
+                selectedDoc?._id === doc._id
+                  ? "bg-blue-600/20 text-blue-400"
+                  : "hover:bg-white/10"
+              }`}
             >
-              <FileText size={16} />
-              <p className="text-sm truncate">{doc.filename}</p>
+              <div className="flex items-center gap-2">
+                <FileText size={14} />
+                <p className="text-sm truncate">{doc.filename}</p>
+              </div>
             </div>
           ))
         )}
       </div>
 
-      {/* RIGHT PANEL */}
+      {/* RIGHT CONTENT */}
       <div className="flex-1 p-6">
 
         {selectedDoc ? (
           <>
             {/* HEADER */}
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold">{selectedDoc.filename}</h2>
+              <div>
+                <h2 className="text-xl font-semibold">{selectedDoc.filename}</h2>
+                <p className="text-xs text-gray-400">
+                  {selectedDoc.contentType.toUpperCase()}
+                </p>
+              </div>
 
               <div className="flex gap-3">
                 {selectedDoc.contentType === 'text' && (
-                  <button onClick={saveDoc}><Save size={18} /></button>
+                  <button onClick={saveDoc} className="hover:text-blue-400">
+                    <Save size={18} />
+                  </button>
                 )}
-                <button onClick={deleteDoc}><Trash2 size={18} /></button>
-                <button onClick={downloadDoc}><Download size={18} /></button>
+                <button onClick={deleteDoc} className="hover:text-red-400">
+                  <Trash2 size={18} />
+                </button>
+                <button onClick={downloadDoc} className="hover:text-green-400">
+                  <Download size={18} />
+                </button>
               </div>
             </div>
 
             {/* PREVIEW */}
-            <div className="h-[80vh] bg-white/5 rounded-xl p-4 overflow-auto">
+            <div className="h-[75vh] bg-white/5 rounded-xl p-4 overflow-auto border border-white/10">
 
-              {/* TEXT */}
+              {/* TEXT EDITOR */}
               {selectedDoc.contentType === 'text' && (
                 <textarea
                   value={content}
@@ -161,7 +164,7 @@ export default function DocHub() {
               {selectedDoc.contentType === 'pdf' && selectedDoc.fileUrl && (
                 <iframe
                   src={selectedDoc.fileUrl}
-                  className="w-full h-[75vh] rounded"
+                  className="w-full h-full rounded"
                   title="PDF Preview"
                 />
               )}
@@ -171,7 +174,7 @@ export default function DocHub() {
                 <img
                   src={selectedDoc.fileUrl}
                   alt={selectedDoc.filename}
-                  className="max-h-[70vh] mx-auto rounded-lg"
+                  className="max-h-full mx-auto rounded-lg"
                 />
               )}
 
@@ -179,7 +182,7 @@ export default function DocHub() {
           </>
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500">
-            Select a document to preview
+            Select a document to view
           </div>
         )}
 
