@@ -1,14 +1,38 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ChatInterface from '../components/ChatInterface';
 import { 
     LayoutDashboard, Cloud, BrainCircuit, FileText, 
-    Settings, LogOut, ChevronRight, HardDrive, FileImage 
+    Settings, LogOut, ChevronRight, HardDrive, Loader2 
 } from 'lucide-react';
 
 export default function Dashboard() {
+    const [insights, setInsights] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    const fetchInsights = async () => {
+        try {
+            const res = await fetch('/api/ai/insights', {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('sphere_token')}`
+                }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setInsights(data);
+            }
+        } catch (error) {
+            console.error("Failed to fetch insights", error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchInsights();
+    }, []);
+
     return (
         <div className="h-screen w-full bg-darkBg text-white flex overflow-hidden relative">
-            {/* Background Blobs for Glassmorphism Depth */}
             <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none"></div>
             <div className="absolute bottom-[-10%] right-[20%] w-[30%] h-[30%] bg-emerald-600/10 rounded-full blur-[120px] pointer-events-none"></div>
 
@@ -54,54 +78,48 @@ export default function Dashboard() {
                 </header>
 
                 <div className="p-8 pt-4 space-y-6 flex-1">
-                    {/* Top Level Metrics */}
+                    {/* Dynamic Top Level Metrics */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <StatCard title="Processed Documents" value="24" icon={<FileText size={24} className="text-blue-400" />} />
-                        <StatCard title="AI Insights Generated" value="142" icon={<BrainCircuit size={24} className="text-emerald-400" />} />
-                        <StatCard title="Cloud Storage Synced" value="1.2 GB" icon={<HardDrive size={24} className="text-purple-400" />} />
+                        <StatCard title="Processed Documents" value={insights.length} icon={<FileText size={24} className="text-blue-400" />} />
+                        <StatCard title="AI Insights Generated" value={insights.length * 3} icon={<BrainCircuit size={24} className="text-emerald-400" />} />
+                        <StatCard title="Cloud Storage Synced" value="Local" icon={<HardDrive size={24} className="text-purple-400" />} />
                     </div>
 
                     {/* RAG System Recent Activity */}
                     <div className="bg-glassBg backdrop-blur-xl border border-glassBorder rounded-2xl p-6 shadow-2xl">
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="text-lg font-semibold">Recent Document Insights</h3>
-                            <button className="text-sm text-blue-400 hover:text-blue-300 transition flex items-center gap-1">
-                                View Library <ChevronRight size={16} />
-                            </button>
                         </div>
                         
                         <div className="space-y-4">
-                            {/* Document Item 1 */}
-                            <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-glassBorder hover:bg-white/10 transition group cursor-pointer">
-                                <div className="flex items-center gap-4">
-                                    <div className="p-3 bg-blue-500/20 rounded-lg text-blue-400">
-                                        <FileText size={20} />
-                                    </div>
-                                    <div>
-                                        <h4 className="font-medium text-sm text-white group-hover:text-blue-400 transition">Q3_Financial_Report.pdf</h4>
-                                        <p className="text-xs text-gray-400 mt-0.5">Extracted 3 key insights • Google Drive</p>
-                                    </div>
+                            {isLoading ? (
+                                <div className="flex justify-center p-4 text-blue-400">
+                                    <Loader2 className="animate-spin" size={24} />
                                 </div>
-                                <button className="px-4 py-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 rounded-lg text-xs font-medium border border-blue-500/30 transition">
-                                    Analyze
-                                </button>
-                            </div>
-
-                            {/* Document Item 2 */}
-                            <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-glassBorder hover:bg-white/10 transition group cursor-pointer">
-                                <div className="flex items-center gap-4">
-                                    <div className="p-3 bg-emerald-500/20 rounded-lg text-emerald-400">
-                                        <FileImage size={20} />
-                                    </div>
-                                    <div>
-                                        <h4 className="font-medium text-sm text-white group-hover:text-emerald-400 transition">System_Architecture_v2.png</h4>
-                                        <p className="text-xs text-gray-400 mt-0.5">Vision analysis complete • Local Upload</p>
-                                    </div>
+                            ) : insights.length === 0 ? (
+                                <div className="text-center p-6 text-gray-500 text-sm border border-dashed border-glassBorder rounded-xl">
+                                    No documents analyzed yet. Upload a file in the chat to begin!
                                 </div>
-                                <button className="px-4 py-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 rounded-lg text-xs font-medium border border-blue-500/30 transition">
-                                    Analyze
-                                </button>
-                            </div>
+                            ) : (
+                                insights.map((doc) => (
+                                    <div key={doc._id} className="flex flex-col p-4 rounded-xl bg-white/5 border border-glassBorder hover:bg-white/10 transition group cursor-pointer">
+                                        <div className="flex items-center gap-4 mb-2">
+                                            <div className="p-3 bg-blue-500/20 rounded-lg text-blue-400">
+                                                <FileText size={20} />
+                                            </div>
+                                            <div>
+                                                <h4 className="font-medium text-sm text-white group-hover:text-blue-400 transition">{doc.filename}</h4>
+                                                <p className="text-xs text-gray-400 mt-0.5">
+                                                    Processed on {new Date(doc.createdAt).toLocaleDateString()}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="text-sm text-gray-300 pl-14 pr-4 pb-2 border-l-2 border-blue-500/30 ml-5 mt-1">
+                                            {doc.summary}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </div>
                 </div>
@@ -109,14 +127,13 @@ export default function Dashboard() {
 
             {/* COLUMN 3: AI Assistant (BuddyBot) */}
             <aside className="w-[400px] p-4 bg-black/20 border-l border-glassBorder z-10 flex flex-col h-full shadow-2xl">
-                <ChatInterface />
+                <ChatInterface onInsightAdded={fetchInsights} />
             </aside>
         </div>
     );
 }
 
 // --- Internal Helper Components ---
-
 function NavItem({ icon, label, active, badge }) {
     return (
         <button className={`flex items-center justify-between w-full px-3 py-2.5 rounded-xl transition ${active ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-gray-400 hover:bg-white/5 hover:text-white border border-transparent'}`}>

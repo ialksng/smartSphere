@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { Send, Paperclip, Loader2, FileText } from 'lucide-react';
 
-export default function ChatInterface() {
+export default function ChatInterface({ onInsightAdded }) {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -43,12 +43,10 @@ export default function ChatInterface() {
         }
     };
 
-    // --- NEW: Handle File Upload ---
     const handleFileUpload = async (event) => {
         const file = event.target.files[0];
         if (!file) return;
 
-        // Add a temporary "uploading" message
         const uploadMsg = { role: 'user', type: 'file', fileName: file.name, text: `Uploading ${file.name}...` };
         setMessages(prev => [...prev, uploadMsg]);
         setIsUploading(true);
@@ -59,19 +57,22 @@ export default function ChatInterface() {
         try {
             const res = await fetch('/api/ai/upload', {
                 method: 'POST',
-                // Note: Do NOT set Content-Type header when sending FormData, the browser handles the boundary automatically
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('sphere_token')}`
+                },
                 body: formData
             });
 
             const data = await res.json();
             
             if (res.ok) {
-                // Replace the temporary message with the AI's summary
                 setMessages(prev => [
-                    ...prev.slice(0, -1), // remove "Uploading..." msg
+                    ...prev.slice(0, -1),
                     { role: 'user', type: 'file', fileName: file.name, text: `Attached: ${file.name}` },
                     { role: 'ai', text: `I've read **${file.name}**. Here is a quick summary:\n\n${data.summary}\n\nWhat would you like to know about it?` }
                 ]);
+                
+                if (onInsightAdded) onInsightAdded(); 
             } else {
                 setMessages(prev => [...prev, { role: 'ai', text: `Upload failed: ${data.message}` }]);
             }
@@ -79,13 +80,12 @@ export default function ChatInterface() {
             setMessages(prev => [...prev, { role: 'ai', text: "Failed to upload file." }]);
         } finally {
             setIsUploading(false);
-            if (fileInputRef.current) fileInputRef.current.value = ''; // Reset input
+            if (fileInputRef.current) fileInputRef.current.value = ''; 
         }
     };
 
     return (
         <div className="flex flex-col h-full w-full bg-glassBg backdrop-blur-xl border border-glassBorder rounded-2xl shadow-2xl overflow-hidden text-white">
-            {/* Header */}
             <div className="p-4 border-b border-glassBorder bg-white/5 flex justify-between items-center">
                 <div>
                     <h2 className="text-xl font-semibold">BuddyBot AI</h2>
@@ -100,10 +100,9 @@ export default function ChatInterface() {
                 </div>
             </div>
 
-            {/* Chat Area */}
             <div className="flex-1 p-4 overflow-y-auto space-y-4">
                 {messages.length === 0 && (
-                    <div className="h-full flex items-center justify-center text-gray-500 text-sm">
+                    <div className="h-full flex items-center justify-center text-gray-500 text-sm text-center">
                         Ask a question or upload a PDF/DOCX to begin...
                     </div>
                 )}
@@ -114,7 +113,6 @@ export default function ChatInterface() {
                                 ? 'bg-blue-600/80 border border-blue-500/50 rounded-tr-sm' 
                                 : 'bg-white/10 border border-glassBorder rounded-tl-sm'
                         }`}>
-                            {/* Render File Attachment visually differently than text */}
                             {msg.type === 'file' ? (
                                 <div className="flex items-center gap-2">
                                     <FileText size={16} className="text-white/80"/>
@@ -135,9 +133,7 @@ export default function ChatInterface() {
                 )}
             </div>
 
-            {/* Input Area */}
             <div className="p-4 border-t border-glassBorder bg-white/5 flex items-center gap-3">
-                {/* Hidden File Input */}
                 <input 
                     type="file" 
                     ref={fileInputRef} 
@@ -145,14 +141,12 @@ export default function ChatInterface() {
                     className="hidden" 
                     accept=".pdf,.docx,.txt,.md"
                 />
-                
                 <button 
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading || isLoading}
                     className="p-2 hover:bg-white/10 rounded-full transition text-gray-400 hover:text-white disabled:opacity-50">
                     <Paperclip size={20} />
                 </button>
-                
                 <input 
                     type="text" 
                     value={input}
