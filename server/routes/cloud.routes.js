@@ -48,14 +48,13 @@ router.get('/google/callback', async (req, res) => {
     } catch (error) {
         console.error('Google OAuth Error:', error);
         
-        // --- UPDATED: ERROR REDIRECT WITH MESSAGE ---
-        // Grab the error message (or a default) and encode it for the URL
+        // --- ERROR REDIRECT WITH MESSAGE ---
         const errMsg = encodeURIComponent(error.message || 'Unknown server error');
         res.redirect(`https://www.ialksng.me/projects/smartsphere/cloudhub/google?cloud=error&msg=${errMsg}`);
     }
 });
 
-// 3. Fetch Google Drive Files
+// 3. Fetch Google Drive Files (UPDATED FOR FOLDERS)
 router.get('/google/files', verifyToken, async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
@@ -67,11 +66,16 @@ router.get('/google/files', verifyToken, async (req, res) => {
         oauth2Client.setCredentials(user.googleTokens);
         const drive = google.drive({ version: 'v3', auth: oauth2Client });
         
+        // Grab the requested folder ID from the URL, or default to the root Drive folder
+        const targetFolderId = req.query.folderId || 'root';
+        
         const response = await drive.files.list({
-            pageSize: 10,
+            pageSize: 100, // Increased limit
             fields: 'files(id, name, mimeType, modifiedTime)',
-            q: "mimeType != 'application/vnd.google-apps.folder' and trashed = false",
-            orderBy: 'modifiedTime desc'
+            // Query exactly what is inside the target folder
+            q: `'${targetFolderId}' in parents and trashed = false`,
+            // Put folders at the top of the list, then sort by newest
+            orderBy: 'folder, modifiedTime desc'
         });
 
         res.json(response.data.files);
