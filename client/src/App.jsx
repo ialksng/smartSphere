@@ -1,6 +1,8 @@
+// client/src/App.jsx
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
+import GoogleDriveHub from './pages/GoogleDriveHub'; // <-- NEW IMPORT
 
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem('sphere_token');
@@ -19,7 +21,7 @@ function App() {
         {/* Public Route */}
         <Route path="/auth" element={<Auth />} />
         
-        {/* Protected Route */}
+        {/* Protected Routes */}
         <Route 
           path="/dashboard" 
           element={
@@ -28,8 +30,17 @@ function App() {
             </ProtectedRoute>
           } 
         />
+        
+        {/* NEW DEDICATED ROUTE */}
+        <Route 
+          path="/cloudhub/google" 
+          element={
+            <ProtectedRoute>
+              <GoogleDriveHub />
+            </ProtectedRoute>
+          } 
+        />
 
-        {/* FIX: Catch-all route prevents blank pages */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>

@@ -37,20 +37,18 @@ router.get('/google/callback', async (req, res) => {
     try {
         if (!code) throw new Error("No authorization code provided.");
 
-        // Exchange the code for actual access/refresh tokens
         const { tokens } = await oauth2Client.getToken(code);
-        
-        // Save the tokens to MongoDB
         await User.findByIdAndUpdate(userId, { googleTokens: tokens });
 
         console.log(`Successfully connected Google Drive for User: ${userId}`);
         
-        // Redirect back to your frontend dashboard on your custom domain
-        res.redirect('https://www.ialksng.me/projects/smartsphere/dashboard?cloud=success');
+        // --- UPDATED REDIRECT URL ---
+        res.redirect('https://www.ialksng.me/projects/smartsphere/cloudhub/google?cloud=success');
         
     } catch (error) {
         console.error('Google OAuth Error:', error);
-        res.redirect('https://www.ialksng.me/projects/smartsphere/dashboard?cloud=error');
+        // --- UPDATED REDIRECT URL ---
+        res.redirect('https://www.ialksng.me/projects/smartsphere/cloudhub/google?cloud=error');
     }
 });
 
