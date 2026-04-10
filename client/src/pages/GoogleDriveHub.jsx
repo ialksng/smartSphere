@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Cloud, FileText, Loader2,
   Search, Folder, ChevronRight,
-  ExternalLink, DownloadCloud, Bot
+  ExternalLink, DownloadCloud, Bot, AlertCircle
 } from 'lucide-react';
 
 export default function GoogleDriveHub() {
@@ -12,6 +12,7 @@ export default function GoogleDriveHub() {
   const [driveFiles, setDriveFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [importingFileId, setImportingFileId] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null); // Added error state
 
   const [currentFolder, setCurrentFolder] = useState({ id: 'root', name: 'My Drive' });
   const [folderHistory, setFolderHistory] = useState([]);
@@ -25,6 +26,7 @@ export default function GoogleDriveHub() {
 
   const fetchDriveData = async (folderId, search = '') => {
     setIsLoading(true);
+    setErrorMessage(null); // Reset errors on new fetch
 
     try {
       const url = search
@@ -38,10 +40,19 @@ export default function GoogleDriveHub() {
       });
 
       const data = await res.json();
-      setDriveFiles(data || []);
+
+      if (res.ok) {
+        // Ensure we always set an array to prevent .filter crashes
+        setDriveFiles(Array.isArray(data) ? data : []);
+      } else {
+        setDriveFiles([]);
+        setErrorMessage(data.message || "Failed to load Google Drive");
+      }
 
     } catch (err) {
       console.error(err);
+      setDriveFiles([]);
+      setErrorMessage("Network error connecting to server.");
     } finally {
       setIsLoading(false);
     }
@@ -77,24 +88,29 @@ export default function GoogleDriveHub() {
 
       const data = await res.json();
 
-      if (target === 'dochub') {
-        navigate('/dochub', { state: { docId: data.insight._id } });
-      }
-
-      if (target === 'buddybot') {
-        navigate('/buddybot', { state: { docId: data.insight._id } });
+      if (res.ok) {
+        if (target === 'dochub') {
+          navigate('/dochub', { state: { docId: data.insight._id } });
+        }
+        if (target === 'buddybot') {
+          navigate('/buddybot', { state: { docId: data.insight._id } });
+        }
+      } else {
+        alert(`Import failed: ${data.message}`);
       }
 
     } catch (err) {
       console.error(err);
-      alert("Import failed");
+      alert("Import failed. Please check connection.");
     } finally {
       setImportingFileId(null);
     }
   };
 
-  const folders = driveFiles.filter(f => f.mimeType.includes('folder'));
-  const files = driveFiles.filter(f => !f.mimeType.includes('folder'));
+  // SAFELY filter items only if driveFiles is an array
+  const safeDriveFiles = Array.isArray(driveFiles) ? driveFiles : [];
+  const folders = safeDriveFiles.filter(f => f.mimeType?.includes('folder'));
+  const files = safeDriveFiles.filter(f => !f.mimeType?.includes('folder'));
 
   return (
     <div className="p-8">
@@ -116,7 +132,7 @@ export default function GoogleDriveHub() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search files..."
-            className="bg-transparent outline-none w-full text-sm"
+            className="bg-transparent outline-none w-full text-sm text-white"
           />
         </div>
 
@@ -126,7 +142,7 @@ export default function GoogleDriveHub() {
             setIsSearching(true);
             fetchDriveData(null, searchTerm);
           }}
-          className="px-4 py-3 bg-blue-600 rounded-xl text-sm"
+          className="px-4 py-3 bg-blue-600 hover:bg-blue-500 transition rounded-xl text-sm"
         >
           Search
         </button>
@@ -140,7 +156,7 @@ export default function GoogleDriveHub() {
               setCurrentFolder({ id: 'root', name: 'My Drive' });
               fetchDriveData('root');
             }}
-            className="px-4 py-3 bg-white/10 rounded-xl text-sm"
+            className="px-4 py-3 bg-white/10 hover:bg-white/20 transition rounded-xl text-sm"
           >
             Clear
           </button>
@@ -149,6 +165,7 @@ export default function GoogleDriveHub() {
 
       <div className="flex items-center gap-2 mb-6 text-sm text-gray-400">
         <button
+          className="hover:text-white transition"
           onClick={() => {
             setCurrentFolder({ id: 'root', name: 'My Drive' });
             setFolderHistory([]);
@@ -161,21 +178,25 @@ export default function GoogleDriveHub() {
         {folderHistory.map((f, i) => (
           <div key={f.id} className="flex items-center gap-2">
             <ChevronRight size={14} />
-            <button onClick={() => handleBreadcrumbClick(i)}>
+            <button className="hover:text-white transition" onClick={() => handleBreadcrumbClick(i)}>
               {f.name}
             </button>
           </div>
         ))}
 
         <ChevronRight size={14} />
-        <span>{currentFolder.name}</span>
+        <span className="text-white">{currentFolder.name}</span>
       </div>
 
-      <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-6 min-h-[300px]">
         {isLoading ? (
           <div className="flex justify-center py-16">
             <Loader2 className="animate-spin text-blue-400" size={32} />
+          </div>
+        ) : errorMessage ? (
+          <div className="flex flex-col items-center justify-center text-red-400 py-10">
+            <AlertCircle size={40} className="mb-4 opacity-80" />
+            <p className="text-center">{errorMessage}</p>
           </div>
         ) : files.length === 0 && folders.length === 0 ? (
           <div className="text-center text-gray-500 py-10">
@@ -189,10 +210,10 @@ export default function GoogleDriveHub() {
                   <div
                     key={folder.id}
                     onClick={() => handleFolderClick(folder.id, folder.name)}
-                    className="p-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 cursor-pointer"
+                    className="p-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 cursor-pointer transition"
                   >
                     <Folder className="text-emerald-400 mb-2" />
-                    <p className="text-sm truncate">{folder.name}</p>
+                    <p className="text-sm truncate text-white">{folder.name}</p>
                   </div>
                 ))}
               </div>
@@ -202,28 +223,29 @@ export default function GoogleDriveHub() {
               {files.map(file => (
                 <div
                   key={file.id}
-                  className="flex justify-between items-center p-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10"
+                  className="flex justify-between items-center p-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition"
                 >
-                  <div className="flex items-center gap-3">
-                    <FileText className="text-blue-400" />
-                    <div>
-                      <p className="text-sm">{file.name}</p>
+                  <div className="flex items-center gap-3 overflow-hidden pr-4">
+                    <FileText className="text-blue-400 flex-shrink-0" />
+                    <div className="truncate">
+                      <p className="text-sm text-white truncate">{file.name}</p>
                       <p className="text-xs text-gray-500">
-                        {new Date(file.modifiedTime).toLocaleDateString()}
+                        {file.modifiedTime ? new Date(file.modifiedTime).toLocaleDateString() : 'Unknown Date'}
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-4 flex-shrink-0">
                     {file.webViewLink && (
-                      <a href={file.webViewLink} target="_blank" rel="noopener noreferrer">
+                      <a href={file.webViewLink} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition">
                         <ExternalLink size={16} />
                       </a>
                     )}
 
                     <button
                       onClick={() => handleImportFile(file.id, file.name, file.mimeType, 'dochub')}
-                      className="hover:text-blue-400"
+                      className="text-gray-400 hover:text-blue-400 transition"
+                      title="Import to DocHub"
                     >
                       {importingFileId === file.id
                         ? <Loader2 className="animate-spin" size={16} />
@@ -232,7 +254,8 @@ export default function GoogleDriveHub() {
 
                     <button
                       onClick={() => handleImportFile(file.id, file.name, file.mimeType, 'buddybot')}
-                      className="hover:text-emerald-400"
+                      className="text-gray-400 hover:text-emerald-400 transition"
+                      title="Send to BuddyBot"
                     >
                       <Bot size={16} />
                     </button>
