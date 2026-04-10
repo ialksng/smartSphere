@@ -1,14 +1,15 @@
-const express = require('express');
-const router = express.Router();
-const Insight = require('../models/Insight');
-const User = require('../models/User');
-const { verifyToken } = require('../middleware/auth.middleware');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
-const { google } = require('googleapis');
-const axios = require('axios');
+import express from 'express';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { google } from 'googleapis';
+import axios from 'axios';
 
+import Insight from '../models/Insight.js';
+import User from '../models/User.js';
+import { verifyToken } from '../middleware/auth.middleware.js';
+
+const router = express.Router();
 const MAX_STORAGE = 500 * 1024 * 1024;
 
 const getUsedStorage = async (userId) => {
@@ -49,7 +50,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-// GET ALL FILES
+// GET ALL FILES (Updated to include Cloud drives when ?all=true)
 router.get('/', verifyToken, async (req, res) => {
     try {
         const { folderId, isTrashed, isFavorite, all } = req.query;
@@ -73,9 +74,77 @@ router.get('/', verifyToken, async (req, res) => {
             query.folderId = folderId || null;
         }
 
-        const docs = await Insight.find(query).sort({ type: -1, createdAt: -1 });
+        // 1. Fetch Local Files
+        const localDocs = await Insight.find(query).sort({ type: -1, createdAt: -1 });
+        let results = [...localDocs.map(d => ({
+            ...d.toObject(),
+            source: d.source || 'local'
+        }))];
 
-        res.json(docs);
+        // 2. Fetch Cloud Files if 'all' is requested
+        if (all === 'true') {
+            const user = await User.findById(req.user.id);
+            
+            // --- Fetch from Google Drive ---
+            if (user?.googleTokens) {
+                try {
+                    const oauth2Client = new google.auth.OAuth2(
+                        process.env.GOOGLE_CLIENT_ID,
+                        process.env.GOOGLE_CLIENT_SECRET,
+                        process.env.GOOGLE_REDIRECT_URI
+                    );
+                    oauth2Client.setCredentials(user.googleTokens);
+                    const drive = google.drive({ version: 'v3', auth: oauth2Client });
+                    
+                    let driveQuery = isTrashed === 'true' ? 'trashed = true' : 'trashed = false';
+                    if (isFavorite === 'true') driveQuery += ' and starred = true';
+
+                    const gRes = await drive.files.list({
+                        q: driveQuery,
+                        fields: 'files(id, name, mimeType, size, starred)',
+                        pageSize: 50 // Keep a reasonable limit for frontend rendering
+                    });
+                    
+                    const gFiles = gRes.data.files.map(f => ({
+                        _id: f.id,
+                        filename: f.name,
+                        source: 'google_drive',
+                        mimeType: f.mimeType,
+                        size: parseInt(f.size) || 0,
+                        isFavorite: f.starred || false,
+                        isExternal: true
+                    }));
+                    results = [...results, ...gFiles];
+                } catch(e) {
+                    console.error("Google Drive list error", e.message);
+                }
+            }
+
+            // --- Fetch from OneDrive ---
+            if (user?.microsoftTokens?.access_token && isTrashed !== 'true' && isFavorite !== 'true') {
+                try {
+                    const msRes = await axios.get(`https://graph.microsoft.com/v1.0/me/drive/root/children`, {
+                        headers: { Authorization: `Bearer ${user.microsoftTokens.access_token}` },
+                        params: { $top: 50 }
+                    });
+                    
+                    const msFiles = msRes.data.value.map(f => ({
+                        _id: f.id,
+                        filename: f.name,
+                        source: 'onedrive',
+                        mimeType: f.file?.mimeType || 'unknown',
+                        size: f.size || 0,
+                        isFavorite: false,
+                        isExternal: true
+                    }));
+                    results = [...results, ...msFiles];
+                } catch(e) {
+                    console.error("OneDrive list error", e.message);
+                }
+            }
+        }
+
+        res.json(results);
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
@@ -372,4 +441,4 @@ router.delete('/:id', verifyToken, async (req, res) => {
     }
 });
 
-module.exports = router;
+export default router;
