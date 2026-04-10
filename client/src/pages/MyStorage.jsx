@@ -3,13 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { 
   ArrowLeft, HardDrive, Upload, FileText, 
   Folder as FolderIcon, FolderPlus, FilePlus, ChevronRight,
-  MoreVertical, Cloud, CloudDownload, Download, Edit2, Trash2, CloudUpload
+  MoreVertical, Cloud, CloudDownload, Download, Edit2, Trash2, CloudUpload, Bot
 } from "lucide-react";
 
 export default function MyStorage() {
   const navigate = useNavigate();
 
-  // Unified Storage State (Files and Folders are fetched together from DocHub)
+  // Unified Storage State
   const [items, setItems] = useState([]); 
   const [used, setUsed] = useState(0);
 
@@ -50,9 +50,12 @@ export default function MyStorage() {
       const data = await res.json();
       setItems(data || []);
       
-      // Calculate total storage used (only files have size)
-      const total = (data || []).reduce((acc, f) => acc + (f.size || 0), 0);
-      setUsed(total);
+      // Dynamic Storage Fix: Only calculate total usage when viewing the root folder
+      // (This prevents the storage bar from shrinking when viewing empty sub-folders)
+      if (parentId === null) {
+        const total = (data || []).reduce((acc, f) => acc + (f.size || 0), 0);
+        setUsed(total);
+      }
     } catch (error) {
       console.error("Error fetching storage data:", error);
     }
@@ -143,6 +146,11 @@ export default function MyStorage() {
     setExportMenuId(null);
   };
 
+  // --- BUDDYBOT IMPORT FUNCTION ---
+  const sendToBuddyBot = (file) => {
+    navigate('/buddybot', { state: { importedFile: file } });
+  };
+
   // --- CONTEXT MENU FUNCTIONS (Right Click) ---
 
   const handleContextMenu = (e, file) => {
@@ -162,14 +170,13 @@ export default function MyStorage() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
       },
-      body: JSON.stringify({ name: newName }) // Adjust key based on your backend expectations (name vs filename)
+      body: JSON.stringify({ name: newName }) 
     });
     fetchData(currentFolder.id);
   };
 
   const handleDownload = () => {
     if (!contextMenu.file) return;
-    // Basic frontend download fallback if backend isn't ready
     if(contextMenu.file.content) {
         const blob = new Blob([contextMenu.file.content], { type: "text/plain" });
         const url = URL.createObjectURL(blob);
@@ -186,7 +193,6 @@ export default function MyStorage() {
     if (!contextMenu.file) return;
     if (!window.confirm("Move to Trash?")) return;
 
-    // Use standard DELETE method if a specific trash route doesn't exist
     await fetch(`/projects/smartsphere/api/dochub/${contextMenu.file._id}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${localStorage.getItem('sphere_token')}` }
@@ -223,7 +229,7 @@ export default function MyStorage() {
     <div className="p-8 text-white bg-[#0b0f19] min-h-screen relative">
       {/* HEADER */}
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate('/dashboard')} className="p-2 rounded hover:bg-white/10">
+        <button onClick={() => navigate('/dashboard')} className="p-2 rounded hover:bg-white/10 transition-colors">
           <ArrowLeft size={18} />
         </button>
         <h1 className="text-2xl font-semibold flex items-center gap-2">
@@ -236,8 +242,8 @@ export default function MyStorage() {
           <span>{(used / (1024 * 1024)).toFixed(1)} MB used</span>
           <span>500 MB</span>
         </div>
-        <div className="w-full bg-white/10 rounded-full h-2">
-          <div className="bg-blue-500 h-2 rounded-full transition-all" style={{ width: `${percent}%` }} />
+        <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
+          <div className="bg-blue-500 h-2 rounded-full transition-all duration-1000 ease-out" style={{ width: `${percent}%` }} />
         </div>
       </div>
 
@@ -321,12 +327,10 @@ export default function MyStorage() {
               <p className="text-sm font-medium truncate">{folder.filename}</p>
             </div>
             
-            {/* Folder Export Dropdown Toggle */}
             <button onClick={(e) => { e.stopPropagation(); setExportMenuId(exportMenuId === folder._id ? null : folder._id); }} className="mt-3 text-xs text-emerald-400 text-left hover:text-emerald-300 transition flex items-center gap-1 opacity-0 group-hover:opacity-100">
               <CloudUpload size={14} /> Sync to Cloud
             </button>
             
-            {/* Folder Export Menu */}
             {exportMenuId === folder._id && (
               <div className="absolute bottom-10 left-4 bg-[#1a2235] border border-white/10 rounded shadow-lg z-10 w-40 overflow-hidden">
                 <button onClick={() => pushToCloud(folder._id, 'folder', 'google')} className="w-full text-left px-3 py-2 text-xs hover:bg-white/5">Google Drive</button>
@@ -348,14 +352,19 @@ export default function MyStorage() {
               <p className="text-xs text-gray-500 mt-1">{(file.size / 1024).toFixed(1)} KB</p>
             </div>
 
-             {/* File Export Dropdown Toggle */}
-             <button onClick={(e) => { e.stopPropagation(); setExportMenuId(exportMenuId === file._id ? null : file._id); }} className="mt-3 text-xs text-blue-400 text-left hover:text-blue-300 transition flex items-center gap-1 opacity-0 group-hover:opacity-100">
-              <CloudUpload size={14} /> Sync to Cloud
-            </button>
+             {/* File Action Buttons */}
+             <div className="mt-3 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={(e) => { e.stopPropagation(); setExportMenuId(exportMenuId === file._id ? null : file._id); }} className="text-xs text-blue-400 text-left hover:text-blue-300 transition flex items-center gap-1">
+                  <CloudUpload size={14} /> Sync to Cloud
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); sendToBuddyBot(file); }} className="text-xs text-purple-400 text-left hover:text-purple-300 transition flex items-center gap-1">
+                  <Bot size={14} /> Send to BuddyBot
+                </button>
+             </div>
 
             {/* File Export Menu */}
             {exportMenuId === file._id && (
-              <div className="absolute bottom-10 left-4 bg-[#1a2235] border border-white/10 rounded shadow-lg z-10 w-40 overflow-hidden">
+              <div className="absolute bottom-16 left-4 bg-[#1a2235] border border-white/10 rounded shadow-lg z-10 w-40 overflow-hidden">
                 <button onClick={() => pushToCloud(file._id, 'file', 'google')} className="w-full text-left px-3 py-2 text-xs hover:bg-white/5">Google Drive</button>
               </div>
             )}
@@ -382,11 +391,18 @@ export default function MyStorage() {
           <button onClick={() => { handleRename(); setContextMenu({visible: false}); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 text-left transition">
             <Edit2 size={16} className="text-yellow-400"/> Rename
           </button>
+          
           {contextMenu.file.type !== 'folder' && (
+            <>
               <button onClick={() => { handleDownload(); setContextMenu({visible: false}); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 text-left transition">
                 <Download size={16} className="text-blue-400"/> Download
               </button>
+              <button onClick={() => { sendToBuddyBot(contextMenu.file); setContextMenu({visible: false}); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 text-left transition">
+                <Bot size={16} className="text-purple-400"/> Ask BuddyBot
+              </button>
+            </>
           )}
+          
           <button onClick={() => { handleDelete(); setContextMenu({visible: false}); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-red-500/20 text-red-400 text-left transition">
             <Trash2 size={16} /> Delete
           </button>

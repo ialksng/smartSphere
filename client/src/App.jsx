@@ -75,8 +75,19 @@ function App() {
           } 
         />
 
+        {/* Supports direct URL IDs (e.g. from DocHub) */}
         <Route 
-          path="/editor" 
+          path="/doceditor/:id" 
+          element={
+            <ProtectedLayout>
+              <DocEditor />
+            </ProtectedLayout>
+          } 
+        />
+
+        {/* Supports state-based navigation (e.g. from MyStorage) */}
+        <Route 
+          path="/doceditor" 
           element={
             <ProtectedLayout>
               <DocEditor />
