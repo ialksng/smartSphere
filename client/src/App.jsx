@@ -1,9 +1,13 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+
 import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
-import GoogleDriveHub from './pages/GoogleDriveHub'; 
+import GoogleDriveHub from './pages/GoogleDriveHub';
 import DocHub from './pages/DocHub';
-import MainLayout from './layouts/MainLayout'; // 🔥 NEW
+import CloudHub from './pages/CloudHub';        // 🔥 NEW
+import BuddyBot from './pages/BuddyBot';        // 🔥 NEW
+
+import MainLayout from './layouts/MainLayout';
 
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem('sphere_token');
@@ -24,8 +28,9 @@ function App() {
         {/* Public */}
         <Route path="/auth" element={<Auth />} />
 
-        {/* 🔥 PROTECTED + LAYOUT WRAPPED ROUTES */}
+        {/* 🔥 PROTECTED ROUTES WITH LAYOUT */}
 
+        {/* Dashboard */}
         <Route 
           path="/dashboard" 
           element={
@@ -37,6 +42,19 @@ function App() {
           } 
         />
 
+        {/* 🔥 CLOUD HUB MAIN PAGE */}
+        <Route 
+          path="/cloudhub" 
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <CloudHub />
+              </MainLayout>
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* Google Drive */}
         <Route 
           path="/cloudhub/google" 
           element={
@@ -48,12 +66,25 @@ function App() {
           } 
         />
 
+        {/* DocHub */}
         <Route 
           path="/dochub" 
           element={
             <ProtectedRoute>
               <MainLayout>
                 <DocHub />
+              </MainLayout>
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* 🔥 BUDDYBOT */}
+        <Route 
+          path="/buddybot" 
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <BuddyBot />
               </MainLayout>
             </ProtectedRoute>
           } 

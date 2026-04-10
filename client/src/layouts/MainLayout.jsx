@@ -5,8 +5,7 @@ import {
   FileText,
   Bot,
   Settings,
-  LogOut,
-  HardDrive
+  LogOut
 } from "lucide-react";
 
 export default function MainLayout({ children }) {
@@ -41,31 +40,20 @@ export default function MainLayout({ children }) {
             onClick={() => navigate('/dochub')}
           />
 
-          {/* 🔥 CLOUD HUB */}
+          {/* 🔥 CLOUD HUB (MAIN ENTRY) */}
           <div className="pt-4 pb-2">
             <p className="text-xs text-gray-500 uppercase px-2">
-              Cloud Hub
+              Cloud
             </p>
           </div>
 
           <NavItem
             icon={<Cloud size={18} className="text-blue-400" />}
-            label="Google Drive"
-            onClick={() => navigate('/cloudhub/google')}
+            label="CloudHub"
+            onClick={() => navigate('/cloudhub')}
           />
 
-          {/* FUTURE CLOUDS */}
-          <NavItem
-            icon={<Cloud size={18} className="text-indigo-400" />}
-            label="OneDrive"
-          />
-
-          <NavItem
-            icon={<Cloud size={18} className="text-purple-400" />}
-            label="Dropbox"
-          />
-
-          {/* 🔥 BUDDYBOT */}
+          {/* 🔥 BUDDYBOT (CLICKABLE PAGE) */}
           <div className="pt-4 pb-2">
             <p className="text-xs text-gray-500 uppercase px-2">
               AI
@@ -75,6 +63,7 @@ export default function MainLayout({ children }) {
           <NavItem
             icon={<Bot size={18} className="text-emerald-400" />}
             label="BuddyBot"
+            onClick={() => navigate('/buddybot')} // 🔥 IMPORTANT
           />
 
         </nav>

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Cloud, FileText, Loader2,
   Search, Folder, ChevronRight,
-  ExternalLink, DownloadCloud, Eye
+  ExternalLink, DownloadCloud, Bot
 } from 'lucide-react';
 
 export default function GoogleDriveHub() {
@@ -53,8 +53,8 @@ export default function GoogleDriveHub() {
     fetchDriveData(id);
   };
 
-  // 🔥 IMPORT → OPEN DOCHUB
-  const handleImportFile = async (fileId, fileName, mimeType) => {
+  // 🔥 IMPORT HANDLER (DOCHUB + BUDDYBOT)
+  const handleImportFile = async (fileId, fileName, mimeType, target) => {
     try {
       setImportingFileId(fileId);
 
@@ -69,10 +69,12 @@ export default function GoogleDriveHub() {
 
       const data = await res.json();
 
-      const openNow = window.confirm(`"${fileName}" imported.\nOpen in DocHub?`);
-
-      if (openNow) {
+      if (target === 'dochub') {
         navigate('/dochub', { state: { docId: data.insight._id } });
+      }
+
+      if (target === 'buddybot') {
+        navigate('/buddybot', { state: { docId: data.insight._id } });
       }
 
     } catch (err) {
@@ -96,7 +98,7 @@ export default function GoogleDriveHub() {
           Google Drive
         </h1>
         <p className="text-gray-400 text-sm">
-          Import files into DocHub and edit them with AI
+          Import files into DocHub or chat with them in BuddyBot
         </p>
       </div>
 
@@ -205,8 +207,8 @@ export default function GoogleDriveHub() {
                     </div>
                   </div>
 
-                  {/* ACTIONS */}
-                  <div className="flex items-center gap-3">
+                  {/* 🔥 ACTIONS */}
+                  <div className="flex items-center gap-4">
 
                     {/* Open in Drive */}
                     {file.webViewLink && (
@@ -215,13 +217,24 @@ export default function GoogleDriveHub() {
                       </a>
                     )}
 
-                    {/* Import */}
+                    {/* Import to DocHub */}
                     <button
-                      onClick={() => handleImportFile(file.id, file.name, file.mimeType)}
+                      onClick={() => handleImportFile(file.id, file.name, file.mimeType, 'dochub')}
+                      title="Import to DocHub"
+                      className="hover:text-blue-400"
                     >
                       {importingFileId === file.id
                         ? <Loader2 className="animate-spin" size={16} />
                         : <DownloadCloud size={16} />}
+                    </button>
+
+                    {/* 🔥 Send to BuddyBot */}
+                    <button
+                      onClick={() => handleImportFile(file.id, file.name, file.mimeType, 'buddybot')}
+                      title="Chat in BuddyBot"
+                      className="hover:text-emerald-400"
+                    >
+                      <Bot size={16} />
                     </button>
 
                   </div>
