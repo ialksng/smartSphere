@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  FileText, Cloud, Bot, Plus, Loader2
+  FileText, Cloud, Bot, Loader2
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -97,39 +97,6 @@ export default function Dashboard() {
             ))}
           </div>
         )}
-      </div>
-
-      {/* 🔥 CLOUD OVERVIEW */}
-      <div className="grid md:grid-cols-2 gap-6">
-
-        <div
-          onClick={() => navigate('/cloudhub')}
-          className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 cursor-pointer"
-        >
-          <div className="flex items-center gap-3 mb-2">
-            <Cloud className="text-blue-400" />
-            <h2 className="text-lg font-medium">CloudHub</h2>
-          </div>
-
-          <p className="text-sm text-gray-400">
-            Manage Google Drive, OneDrive, Dropbox
-          </p>
-        </div>
-
-        <div
-          onClick={() => navigate('/buddybot')}
-          className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 cursor-pointer"
-        >
-          <div className="flex items-center gap-3 mb-2">
-            <Bot className="text-emerald-400" />
-            <h2 className="text-lg font-medium">BuddyBot</h2>
-          </div>
-
-          <p className="text-sm text-gray-400">
-            Chat with your documents using AI
-          </p>
-        </div>
-
       </div>
 
     </div>
