@@ -47,7 +47,7 @@ router.get('/google/callback', async (req, res) => {
     }
 });
 
-// 3. Fetch Files (with search support)
+// 3. Fetch Files
 router.get('/google/files', verifyToken, async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
@@ -98,7 +98,7 @@ router.post('/google/import', verifyToken, async (req, res) => {
         let fileBuffer;
         let finalMimeType = mimeType;
 
-        // 🔥 Get metadata for preview
+        // Get metadata
         const fileMeta = await drive.files.get({
             fileId,
             fields: 'webViewLink'
@@ -130,7 +130,7 @@ router.post('/google/import', verifyToken, async (req, res) => {
             "You are a helpful document summarizer."
         );
 
-        // 🔥 Save to DB (DocHub ready)
+        // Save to DB
         const newInsight = new Insight({
             userId: req.user.id,
             filename: fileName,
@@ -162,6 +162,39 @@ router.post('/google/import', verifyToken, async (req, res) => {
     } catch (error) {
         console.error("Import Error:", error);
         res.status(500).json({ message: "Import failed" });
+    }
+});
+
+// 🔥 5. GOOGLE DRIVE STORAGE (NEW)
+router.get('/google/storage', verifyToken, async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+
+        if (!user?.googleTokens) {
+            return res.status(401).json({ message: "Google Drive not connected." });
+        }
+
+        oauth2Client.setCredentials(user.googleTokens);
+        const drive = google.drive({ version: 'v3', auth: oauth2Client });
+
+        const response = await drive.about.get({
+            fields: 'storageQuota'
+        });
+
+        const quota = response.data.storageQuota;
+
+        // Convert safely (Google returns strings)
+        const used = Number(quota.usage || 0);
+        const total = Number(quota.limit || 0);
+
+        res.json({
+            used,
+            total
+        });
+
+    } catch (error) {
+        console.error("Storage Fetch Error:", error);
+        res.status(500).json({ message: "Failed to fetch storage info" });
     }
 });
 

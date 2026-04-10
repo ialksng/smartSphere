@@ -40,35 +40,23 @@ export default function MainLayout({ children }) {
             onClick={() => navigate('/dochub')}
           />
 
-          {/* 🔥 CLOUD HUB (MAIN ENTRY) */}
-          <div className="pt-4 pb-2">
-            <p className="text-xs text-gray-500 uppercase px-2">
-              Cloud
-            </p>
-          </div>
-
+          {/* CLOUD HUB */}
           <NavItem
-            icon={<Cloud size={18} className="text-blue-400" />}
+            icon={<Cloud size={18} />}
             label="CloudHub"
             onClick={() => navigate('/cloudhub')}
           />
 
-          {/* 🔥 BUDDYBOT (CLICKABLE PAGE) */}
-          <div className="pt-4 pb-2">
-            <p className="text-xs text-gray-500 uppercase px-2">
-              AI
-            </p>
-          </div>
-
+          {/* BUDDYBOT */}
           <NavItem
-            icon={<Bot size={18} className="text-emerald-400" />}
+            icon={<Bot size={18} />}
             label="BuddyBot"
-            onClick={() => navigate('/buddybot')} // 🔥 IMPORTANT
+            onClick={() => navigate('/buddybot')}
           />
 
         </nav>
 
-        {/* 🔥 BOTTOM SECTION */}
+        {/* BOTTOM SECTION */}
         <div className="p-4 border-t border-white/10 space-y-2">
 
           <NavItem
