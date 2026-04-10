@@ -7,9 +7,23 @@ const mammoth = require('mammoth');
 const extractTextFromBuffer = async (buffer, mimetype) => {
     try {
         if (mimetype === 'application/pdf') {
-            // FIX: Safely unwrap the function whether it is a CommonJS or ESM export
-            const parsePDF = pdfParse.default || pdfParse; 
             
+            // 1. Hunt for the actual extraction function safely
+            let parsePDF = null;
+            if (typeof pdfParse === 'function') {
+                parsePDF = pdfParse;
+            } else if (pdfParse && typeof pdfParse.default === 'function') {
+                parsePDF = pdfParse.default;
+            } else {
+                // If it is STILL broken, log exactly what it is to the Render console
+                console.error("=== PDF-PARSE DEBUG INFO ===");
+                console.error("Export Type:", typeof pdfParse);
+                console.error("Export Content:", pdfParse);
+                console.error("============================");
+                throw new Error(`pdf-parse package is corrupted. Check Render Logs. Export type: ${typeof pdfParse}`);
+            }
+
+            // 2. Extract the text
             const data = await parsePDF(buffer);
             return data.text;
         } 
