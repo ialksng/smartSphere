@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  FileText, Cloud, Bot, Loader2, Plus
+  FileText, Cloud, Bot, Loader2, Plus, Search, Upload
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -9,21 +9,46 @@ export default function Dashboard() {
 
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+
+  const [stats, setStats] = useState({
+    docs: 0,
+    chats: 0,
+    storage: "0 MB"
+  });
+
+  const token = localStorage.getItem('sphere_token');
 
   useEffect(() => {
     fetchDocs();
+    fetchStats();
   }, []);
 
-  const fetchDocs = async () => {
+  // 🔥 BACKEND SEARCH (UPDATED)
+  useEffect(() => {
+    const delayDebounce = setTimeout(() => {
+      fetchDocs(search);
+    }, 400);
+
+    return () => clearTimeout(delayDebounce);
+  }, [search]);
+
+  const fetchDocs = async (searchQuery = "") => {
     try {
-      const res = await fetch('/projects/smartsphere/api/dochub', {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
+      setLoading(true);
+
+      const res = await fetch(
+        `/projects/smartsphere/api/dochub?search=${searchQuery}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
         }
-      });
+      );
 
       const data = await res.json();
       setDocs(data);
+
     } catch (err) {
       console.error(err);
     } finally {
@@ -31,83 +56,133 @@ export default function Dashboard() {
     }
   };
 
+  const fetchStats = async () => {
+    try {
+      const res = await fetch('/projects/smartsphere/api/stats', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      const data = await res.json();
+      setStats(data);
+
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // 🔥 DRAG & DROP UPLOAD (FIXED)
+  const handleDrop = async (e) => {
+    e.preventDefault();
+
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      await fetch('/projects/smartsphere/api/ai/upload', {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      fetchDocs();
+      fetchStats();
+
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   return (
-    <div className="p-8 space-y-8">
+    <div
+      className="min-h-screen p-8 text-white"
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={handleDrop}
+      style={{
+        background: "radial-gradient(circle at top, #0f172a, #020617)"
+      }}
+    >
 
       {/* 🔥 HEADER */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-2xl font-semibold">Welcome back 👋</h1>
+          <h1 className="text-2xl font-semibold">SmartSphere</h1>
           <p className="text-gray-400 text-sm">
-            Your AI-powered cloud workspace
+            AI Cloud Intelligence Platform
           </p>
         </div>
 
         <button
           onClick={() => navigate('/dochub')}
-          className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-xl hover:opacity-90"
+          className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-xl"
         >
           <Plus size={16} />
-          New Document
+          New Doc
         </button>
       </div>
 
-      {/* 🔥 STATS */}
-      <div className="grid md:grid-cols-3 gap-6">
-        <StatCard title="Documents" value={docs.length} icon={<FileText />} />
-        <StatCard title="AI Chats" value="24" icon={<Bot />} />
-        <StatCard title="Storage Used" value="128 MB" icon={<Cloud />} />
+      {/* 🔍 SEARCH */}
+      <div className="mb-6 relative">
+        <Search className="absolute left-3 top-3 text-gray-400" size={18} />
+        <input
+          type="text"
+          placeholder="Search documents..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full pl-10 p-3 rounded-xl bg-white/5 border border-white/10 focus:outline-none"
+        />
       </div>
 
-      {/* 🔥 QUICK ACTIONS */}
-      <div className="grid md:grid-cols-3 gap-6">
+      {/* 📊 STATS */}
+      <div className="grid md:grid-cols-3 gap-6 mb-8">
+        <StatCard title="Documents" value={stats.docs} icon={<FileText />} />
+        <StatCard title="AI Chats" value={stats.chats} icon={<Bot />} />
+        <StatCard title="Storage" value={stats.storage} icon={<Cloud />} />
+      </div>
+
+      {/* ⚡ ACTIONS */}
+      <div className="grid md:grid-cols-3 gap-6 mb-8">
 
         <ActionCard
           icon={<Cloud />}
-          title="Import from Cloud"
-          desc="Google Drive, OneDrive, Dropbox"
+          title="CloudHub"
+          desc="Import from Drive / Dropbox"
           onClick={() => navigate('/cloudhub')}
         />
 
         <ActionCard
-          icon={<FileText />}
-          title="Open DocHub"
-          desc="View and edit documents"
-          onClick={() => navigate('/dochub')}
-        />
-
-        <ActionCard
           icon={<Bot />}
-          title="Ask BuddyBot"
+          title="BuddyBot"
           desc="Chat with your documents"
           onClick={() => navigate('/buddybot')}
         />
 
+        <ActionCard
+          icon={<Upload />}
+          title="Upload File"
+          desc="Drag & drop anywhere"
+        />
+
       </div>
 
-      {/* 🔥 RECENT DOCUMENTS */}
-      <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold">Recent Documents</h2>
-          <button
-            onClick={() => navigate('/dochub')}
-            className="text-sm text-gray-400 hover:text-white"
-          >
-            View all →
-          </button>
-        </div>
+      {/* 📁 DOCUMENTS */}
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur">
+
+        <h2 className="text-lg font-semibold mb-4">Documents</h2>
 
         {loading ? (
-          <div className="flex justify-center py-10">
-            <Loader2 className="animate-spin" />
-          </div>
+          <Loader2 className="animate-spin mx-auto" />
         ) : docs.length === 0 ? (
-          <div className="text-gray-500 text-center py-10">
-            No documents yet. Import from CloudHub.
-          </div>
+          <p className="text-gray-400 text-center">No documents found</p>
         ) : (
           <div className="space-y-3">
-            {docs.slice(0, 5).map(doc => (
+            {docs.map(doc => (
               <div
                 key={doc._id}
                 onClick={() =>
@@ -115,47 +190,46 @@ export default function Dashboard() {
                 }
                 className="p-4 rounded-xl bg-white/5 hover:bg-white/10 cursor-pointer border border-white/10 transition"
               >
-                <div className="flex justify-between items-center">
-                  <p className="font-medium">{doc.filename}</p>
-                  <span className="text-xs text-gray-500">Open</span>
-                </div>
-
-                <p className="text-sm text-gray-400 mt-1 line-clamp-2">
-                  {doc.summary || "No summary available"}
+                <p className="font-medium">{doc.filename}</p>
+                <p className="text-sm text-gray-400">
+                  {doc.summary || "No summary"}
                 </p>
               </div>
             ))}
           </div>
         )}
+
       </div>
 
     </div>
   );
 }
+
 
 // 🔹 STAT CARD
 function StatCard({ title, value, icon }) {
   return (
-    <div className="p-6 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between hover:bg-white/10 transition">
+    <div className="p-6 rounded-2xl bg-white/5 border border-white/10 flex justify-between backdrop-blur">
       <div>
         <p className="text-sm text-gray-400">{title}</p>
         <h2 className="text-xl font-semibold mt-1">{value}</h2>
       </div>
-      <div className="text-gray-300">{icon}</div>
+      <div>{icon}</div>
     </div>
   );
 }
+
 
 // 🔹 ACTION CARD
 function ActionCard({ icon, title, desc, onClick }) {
   return (
     <div
       onClick={onClick}
-      className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 cursor-pointer transition"
+      className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 cursor-pointer transition backdrop-blur"
     >
       <div className="mb-3">{icon}</div>
       <h3 className="text-lg font-medium">{title}</h3>
-      <p className="text-sm text-gray-400 mt-1">{desc}</p>
+      <p className="text-sm text-gray-400">{desc}</p>
     </div>
   );
 }
