@@ -5,7 +5,8 @@ import {
   FileText,
   Bot,
   Settings,
-  LogOut
+  LogOut,
+  HardDrive
 } from "lucide-react";
 
 export default function MainLayout({ children }) {
