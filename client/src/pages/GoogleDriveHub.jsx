@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Cloud, FileText, Loader2,
   Search, Folder, ChevronRight,
-  ExternalLink, DownloadCloud, Bot, AlertCircle
+  DownloadCloud, Bot, AlertCircle
 } from 'lucide-react';
 
 export default function GoogleDriveHub() {
@@ -26,7 +26,7 @@ export default function GoogleDriveHub() {
 
   const fetchDriveData = async (folderId, search = '') => {
     setIsLoading(true);
-    setErrorMessage(null); // Reset errors on new fetch
+    setErrorMessage(null);
 
     try {
       const url = search
@@ -42,7 +42,6 @@ export default function GoogleDriveHub() {
       const data = await res.json();
 
       if (res.ok) {
-        // Ensure we always set an array to prevent .filter crashes
         setDriveFiles(Array.isArray(data) ? data : []);
       } else {
         setDriveFiles([]);
@@ -89,11 +88,13 @@ export default function GoogleDriveHub() {
       const data = await res.json();
 
       if (res.ok) {
+        // FIXED: Route to /doceditor instead of /dochub
         if (target === 'dochub') {
-          navigate('/dochub', { state: { docId: data.insight._id } });
+          navigate('/doceditor', { state: { docId: data.insight._id } });
         }
+        // FIXED: Send { importedFile: file } so BuddyBot catches the auto-load context
         if (target === 'buddybot') {
-          navigate('/buddybot', { state: { docId: data.insight._id } });
+          navigate('/buddybot', { state: { importedFile: data.insight } });
         }
       } else {
         alert(`Import failed: ${data.message}`);
@@ -112,7 +113,6 @@ export default function GoogleDriveHub() {
       const token = localStorage.getItem('sphere_token');
       if (!token) return alert("Please log in first.");
 
-      // Decode the JWT to get the user ID required by your backend route
       const payload = JSON.parse(atob(token.split('.')[1]));
       const userId = payload.id || payload._id;
 
@@ -120,7 +120,6 @@ export default function GoogleDriveHub() {
       const data = await res.json();
 
       if (data.url) {
-        // Redirect to the Google Consent Screen
         window.location.href = data.url; 
       } else {
         alert("Failed to get authentication URL.");
@@ -131,7 +130,6 @@ export default function GoogleDriveHub() {
     }
   };
 
-  // SAFELY filter items only if driveFiles is an array
   const safeDriveFiles = Array.isArray(driveFiles) ? driveFiles : [];
   const folders = safeDriveFiles.filter(f => f.mimeType?.includes('folder'));
   const files = safeDriveFiles.filter(f => !f.mimeType?.includes('folder'));
@@ -220,8 +218,6 @@ export default function GoogleDriveHub() {
         ) : errorMessage ? (
           
           <div className="flex flex-col items-center justify-center text-red-400 py-10">
-            {/* Moved the comment safely inside the div */}
-            {/* Reconnect Button UI */}
             <AlertCircle size={40} className="mb-4 opacity-80" />
             <p className="text-center mb-6">{errorMessage}</p>
             <button 
@@ -270,12 +266,8 @@ export default function GoogleDriveHub() {
                   </div>
 
                   <div className="flex items-center gap-4 flex-shrink-0">
-                    {file.webViewLink && (
-                      <a href={file.webViewLink} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition">
-                        <ExternalLink size={16} />
-                      </a>
-                    )}
-
+                    {/* FIXED: Removed the ExternalLink redirect option */}
+                    
                     <button
                       onClick={() => handleImportFile(file.id, file.name, file.mimeType, 'dochub')}
                       className="text-gray-400 hover:text-blue-400 transition"
