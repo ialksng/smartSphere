@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Cloud, Bot, Loader2, Plus, Search, Star } from 'lucide-react';
+import { FileText, Cloud, Bot, Loader2, Plus, Search, Star, DownloadCloud } from 'lucide-react';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -12,6 +12,7 @@ export default function Dashboard() {
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [importingFileId, setImportingFileId] = useState(null);
 
   const [stats, setStats] = useState({
     docs: 0,
@@ -117,10 +118,49 @@ export default function Dashboard() {
     }
   };
 
-  const handleSelectResult = (docId) => {
-    setShowDropdown(false);
-    setSearch("");
-    navigate('/dochub', { state: { docId } });
+  const handleSelectResult = async (doc) => {
+    if (!doc.isExternal) {
+      setShowDropdown(false);
+      setSearch("");
+      navigate('/dochub', { state: { docId: doc._id } });
+      return;
+    }
+
+    setImportingFileId(doc._id);
+    
+    try {
+      const endpoint = doc.source === 'google_drive_live' 
+        ? '/projects/smartsphere/api/cloud/google/import'
+        : '/projects/smartsphere/api/cloud/microsoft/import';
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          fileId: doc._id,
+          fileName: doc.filename,
+          mimeType: doc.mimeType
+        })
+      });
+
+      const data = await res.json();
+      
+      if (data.insight) {
+        setShowDropdown(false);
+        setSearch("");
+        navigate('/dochub', { state: { docId: data.insight._id } });
+      } else {
+        alert(data.message || "Failed to import file");
+      }
+    } catch (err) {
+      console.error("Import error:", err);
+      alert("Error importing cloud file");
+    } finally {
+      setImportingFileId(null);
+    }
   };
 
   return (
@@ -153,7 +193,7 @@ export default function Dashboard() {
         <Search className="absolute left-3 top-3 text-gray-400" size={18} />
         <input
           type="text"
-          placeholder="Search documents by name, content, or tags..."
+          placeholder="Search global workspace (Local, Google Drive, OneDrive)..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full pl-10 p-3 rounded-xl bg-white/5 border border-white/10 focus:outline-none focus:ring-1 focus:ring-white/30 relative z-50"
@@ -161,32 +201,43 @@ export default function Dashboard() {
 
         {showDropdown && (
           <div className="absolute top-full left-0 right-0 mt-2 bg-[#0f172a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 max-h-80 flex flex-col">
-            {isSearching ? (
+            {isSearching && searchResults.length === 0 ? (
               <div className="p-4 text-center text-gray-400 text-sm flex items-center justify-center gap-2">
                 <Loader2 className="animate-spin" size={16} />
-                Searching...
+                Scanning Local & Cloud Drives...
               </div>
             ) : searchResults.length > 0 ? (
               <ul className="overflow-y-auto">
                 {searchResults.map(doc => (
                   <li
                     key={doc._id}
-                    onClick={() => handleSelectResult(doc._id)}
-                    className="p-4 hover:bg-white/10 cursor-pointer flex flex-col gap-1 border-b border-white/5 last:border-0 transition-colors"
+                    onClick={() => handleSelectResult(doc)}
+                    className={`p-4 hover:bg-white/10 cursor-pointer flex flex-col gap-1 border-b border-white/5 last:border-0 transition-colors ${importingFileId === doc._id ? 'opacity-50 pointer-events-none' : ''}`}
                   >
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                      {(doc.source === 'google_drive' || doc.source === 'onedrive') ? (
-                        <Cloud size={16} className="text-blue-400 flex-shrink-0" />
-                      ) : (
-                        <FileText size={16} className="text-white flex-shrink-0" />
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-sm font-medium w-full">
+                        {(doc.source === 'google_drive_live' || doc.source === 'onedrive_live') ? (
+                          <Cloud size={16} className="text-blue-400 flex-shrink-0" />
+                        ) : (
+                          <FileText size={16} className="text-white flex-shrink-0" />
+                        )}
+                        <span className="truncate">{doc.filename}</span>
+                      </div>
+                      
+                      {importingFileId === doc._id && (
+                        <Loader2 size={14} className="animate-spin text-gray-400 ml-2" />
                       )}
-                      <span className="truncate">{doc.filename}</span>
                     </div>
-                    <div className="pl-6 text-xs text-gray-400 truncate">
-                      <span className="uppercase text-[10px] bg-white/10 px-1.5 py-0.5 rounded mr-2">
-                        {doc.source}
+                    
+                    <div className="pl-6 text-xs text-gray-400 truncate flex items-center">
+                      <span className={`uppercase text-[10px] px-1.5 py-0.5 rounded mr-2 ${doc.isExternal ? 'bg-blue-500/20 text-blue-300' : 'bg-white/10'}`}>
+                        {doc.source.replace('_live', '')}
                       </span>
-                      {doc.summary || "No summary available"}
+                      {doc.isExternal ? (
+                        <span className="flex items-center gap-1"><DownloadCloud size={10} /> Click to import to DocHub</span>
+                      ) : (
+                        doc.summary || "Imported Document"
+                      )}
                     </div>
                   </li>
                 ))}
