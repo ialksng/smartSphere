@@ -38,6 +38,8 @@ export default function GoogleDriveHub() {
         }
       });
 
+      if (!res.ok) throw new Error("Failed to fetch");
+
       const data = await res.json();
       setDriveFiles(data);
       setIsConnected(true);
@@ -56,19 +58,34 @@ export default function GoogleDriveHub() {
     fetchDriveData(id);
   };
 
+  // 🔥 IMPROVED IMPORT
   const handleImportFile = async (fileId, fileName, mimeType) => {
-    setImportingFileId(fileId);
+    try {
+      setImportingFileId(fileId);
 
-    await fetch('/projects/smartsphere/api/cloud/google/import', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
-      },
-      body: JSON.stringify({ fileId, fileName, mimeType })
-    });
+      const res = await fetch('/projects/smartsphere/api/cloud/google/import', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
+        },
+        body: JSON.stringify({ fileId, fileName, mimeType })
+      });
 
-    setImportingFileId(null);
+      if (!res.ok) throw new Error("Import failed");
+
+      const data = await res.json();
+
+      // 🔥 SUCCESS → REDIRECT TO DOCHUB
+      alert(`Imported "${fileName}" successfully!`);
+      navigate('/dochub');
+
+    } catch (err) {
+      console.error(err);
+      alert("Import failed. Try again.");
+    } finally {
+      setImportingFileId(null);
+    }
   };
 
   const folders = driveFiles.filter(f => f.mimeType.includes('folder'));
@@ -81,7 +98,10 @@ export default function GoogleDriveHub() {
         {/* HEADER */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
-            <button onClick={() => navigate('/dashboard')} className="p-2 hover:bg-white/10 rounded-lg">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="p-2 hover:bg-white/10 rounded-lg"
+            >
               <ArrowLeft />
             </button>
 
@@ -111,6 +131,7 @@ export default function GoogleDriveHub() {
 
           <button
             onClick={() => {
+              if (!searchTerm.trim()) return;
               setIsSearching(true);
               fetchDriveData(null, searchTerm);
             }}
@@ -221,7 +242,11 @@ export default function GoogleDriveHub() {
 
                         <div className="flex gap-2">
                           {file.webViewLink && (
-                            <a href={file.webViewLink} target="_blank">
+                            <a
+                              href={file.webViewLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
                               <ExternalLink size={16} />
                             </a>
                           )}
