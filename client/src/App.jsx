@@ -2,11 +2,9 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
 
-// A simple wrapper component to check for the JWT token
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem('sphere_token');
   if (!token) {
-    // If no token exists, redirect to login
     return <Navigate to="/auth" replace />;
   }
   return children;
@@ -30,6 +28,9 @@ function App() {
             </ProtectedRoute>
           } 
         />
+
+        {/* FIX: Catch-all route prevents blank pages */}
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
   );
