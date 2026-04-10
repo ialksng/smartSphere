@@ -13,16 +13,23 @@ mongoose.connect(process.env.MONGO_URI)
 app.use(cors());
 app.use(express.json());
 
-// --- FIX: Reverted API routes to standard paths ---
-// Vercel's proxy strips the subpath before it reaches here, 
-// so the backend just needs to listen on /api
-app.use('/api/auth', require('./routes/auth.routes'));
-app.use('/api/ai', require('./routes/ai.routes'));     
-app.use('/api/cloud', require('./routes/cloud.routes'));
+// --- API ROUTING CONFIGURATION ---
+// Create a unified router for all API endpoints
+const apiRouter = express.Router();
 
-app.get('/api/health', (req, res) => {
+apiRouter.use('/auth', require('./routes/auth.routes'));
+apiRouter.use('/ai', require('./routes/ai.routes'));     
+apiRouter.use('/cloud', require('./routes/cloud.routes'));
+apiRouter.get('/health', (req, res) => {
     res.json({ status: 'ok', message: 'Smart Sphere API is running' });
 });
+
+// CRITICAL FIX: Mount the API router on BOTH paths.
+// This ensures that when Google redirects back to your custom domain
+// (ialksng.me/projects/smartsphere/api/cloud/google/callback), 
+// the Express backend catches it before the React frontend tries to render a blank page.
+app.use('/api', apiRouter);
+app.use('/projects/smartsphere/api', apiRouter); 
 // --------------------------------------------------
 
 const clientBuildPath = path.join(__dirname, '../client/dist');
