@@ -7,7 +7,11 @@ export default function Dashboard() {
 
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
+  
   const [search, setSearch] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
 
   const [stats, setStats] = useState({
     docs: 0,
@@ -24,14 +28,35 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (!search) return;
+    if (!search.trim()) {
+      setSearchResults([]);
+      setShowDropdown(false);
+      return;
+    }
 
-    const delay = setTimeout(() => {
-      navigate(`/dochub?search=${search}`);
+    const delay = setTimeout(async () => {
+      setIsSearching(true);
+      setShowDropdown(true);
+      
+      try {
+        const res = await fetch(`/projects/smartsphere/api/dochub/search?q=${encodeURIComponent(search)}`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+
+        const data = await res.json();
+        setSearchResults(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error(err);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
     }, 500);
 
     return () => clearTimeout(delay);
-  }, [search, navigate]);
+  }, [search, token]);
 
   const fetchDocs = async () => {
     try {
@@ -92,6 +117,12 @@ export default function Dashboard() {
     }
   };
 
+  const handleSelectResult = (docId) => {
+    setShowDropdown(false);
+    setSearch("");
+    navigate('/dochub', { state: { docId } });
+  };
+
   return (
     <div
       className="min-h-screen p-8 text-white space-y-8"
@@ -118,15 +149,55 @@ export default function Dashboard() {
         </button>
       </div>
 
-      <div className="relative">
+      <div className="relative z-50">
         <Search className="absolute left-3 top-3 text-gray-400" size={18} />
         <input
           type="text"
-          placeholder="Search across all documents..."
+          placeholder="Search documents by name, content, or tags..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-10 p-3 rounded-xl bg-white/5 border border-white/10 focus:outline-none focus:ring-1 focus:ring-white/30"
+          className="w-full pl-10 p-3 rounded-xl bg-white/5 border border-white/10 focus:outline-none focus:ring-1 focus:ring-white/30 relative z-50"
         />
+
+        {showDropdown && (
+          <div className="absolute top-full left-0 right-0 mt-2 bg-[#0f172a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 max-h-80 flex flex-col">
+            {isSearching ? (
+              <div className="p-4 text-center text-gray-400 text-sm flex items-center justify-center gap-2">
+                <Loader2 className="animate-spin" size={16} />
+                Searching...
+              </div>
+            ) : searchResults.length > 0 ? (
+              <ul className="overflow-y-auto">
+                {searchResults.map(doc => (
+                  <li
+                    key={doc._id}
+                    onClick={() => handleSelectResult(doc._id)}
+                    className="p-4 hover:bg-white/10 cursor-pointer flex flex-col gap-1 border-b border-white/5 last:border-0 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      {(doc.source === 'google_drive' || doc.source === 'onedrive') ? (
+                        <Cloud size={16} className="text-blue-400 flex-shrink-0" />
+                      ) : (
+                        <FileText size={16} className="text-white flex-shrink-0" />
+                      )}
+                      <span className="truncate">{doc.filename}</span>
+                    </div>
+                    <div className="pl-6 text-xs text-gray-400 truncate">
+                      <span className="uppercase text-[10px] bg-white/10 px-1.5 py-0.5 rounded mr-2">
+                        {doc.source}
+                      </span>
+                      {doc.summary || "No summary available"}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="p-4 text-center text-gray-400 text-sm">
+                No results found for "{search}"
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="grid md:grid-cols-4 gap-6">
