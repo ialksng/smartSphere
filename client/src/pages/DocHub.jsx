@@ -1,19 +1,18 @@
 import { useEffect, useState } from "react";
-import { Folder, FileText, Upload, ArrowLeft } from "lucide-react";
+import { Folder, FileText, Upload } from "lucide-react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 
 const DocHub = () => {
   const [items, setItems] = useState([]);
   const [currentFolder, setCurrentFolder] = useState(null);
-  const [folderStack, setFolderStack] = useState([]);
   const [breadcrumb, setBreadcrumb] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [menu, setMenu] = useState(null);
 
   const editor = useEditor({
     extensions: [StarterKit],
-    content: "",
+    content: ""
   });
 
   useEffect(() => {
@@ -70,17 +69,8 @@ const DocHub = () => {
   };
 
   const openFolder = (id, name) => {
-    setFolderStack(prev => [...prev, currentFolder]);
     setBreadcrumb(prev => [...prev, { id, name }]);
     setCurrentFolder(id);
-    setSelectedFile(null);
-  };
-
-  const goBack = () => {
-    const prev = folderStack[folderStack.length - 1] || null;
-    setFolderStack(stack => stack.slice(0, -1));
-    setBreadcrumb(b => b.slice(0, -1));
-    setCurrentFolder(prev);
     setSelectedFile(null);
   };
 
@@ -102,15 +92,13 @@ const DocHub = () => {
   const saveFile = async () => {
     if (!selectedFile || !editor) return;
 
-    const html = editor.getHTML();
-
     await fetch(`/projects/smartsphere/api/dochub/${selectedFile._id}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
       },
-      body: JSON.stringify({ content: html })
+      body: JSON.stringify({ content: editor.getHTML() })
     });
   };
 
@@ -193,13 +181,24 @@ const DocHub = () => {
   const allowDrop = (e) => e.preventDefault();
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full bg-[#0b0f19] text-white">
 
-      <div className="w-80 border-r p-4 bg-white/5">
+      <div className="w-72 bg-[#111827] border-r border-white/10 p-4 flex flex-col">
 
-        <div className="flex items-center gap-2 text-sm mb-4 text-gray-400 flex-wrap">
+        <h2 className="text-lg font-semibold mb-4">DocHub</h2>
+
+        <div className="flex gap-2 mb-4">
+          <button onClick={createFolder} className="flex-1 py-1 bg-blue-600 rounded text-sm">
+            + Folder
+          </button>
+          <button onClick={createFile} className="flex-1 py-1 bg-white/10 rounded text-sm">
+            + File
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 text-xs text-gray-400 mb-4 flex-wrap">
           <span
-            className="cursor-pointer"
+            className="cursor-pointer hover:text-white"
             onClick={() => {
               setCurrentFolder(null);
               setBreadcrumb([]);
@@ -209,10 +208,10 @@ const DocHub = () => {
           </span>
 
           {breadcrumb.map((b, i) => (
-            <span key={b.id} className="flex items-center gap-2">
+            <span key={b.id} className="flex items-center gap-1">
               /
               <span
-                className="cursor-pointer"
+                className="cursor-pointer hover:text-white"
                 onClick={() => {
                   const newPath = breadcrumb.slice(0, i + 1);
                   setBreadcrumb(newPath);
@@ -225,19 +224,7 @@ const DocHub = () => {
           ))}
         </div>
 
-        <div className="flex gap-2 mb-4">
-          <button onClick={createFolder} className="px-2 py-1 bg-white/10 rounded">+ Folder</button>
-          <button onClick={createFile} className="px-2 py-1 bg-white/10 rounded">+ File</button>
-        </div>
-
-        {currentFolder && (
-          <button onClick={goBack} className="flex items-center gap-2 text-sm mb-3 text-gray-400">
-            <ArrowLeft size={16} />
-            Back
-          </button>
-        )}
-
-        <div className="space-y-2">
+        <div className="flex-1 overflow-y-auto space-y-2">
           {items.map(item => (
             <div
               key={item._id}
@@ -251,7 +238,7 @@ const DocHub = () => {
                   : openFile(item._id)
               }
               onContextMenu={(e) => handleRightClick(e, item)}
-              className="flex items-center gap-2 p-2 cursor-pointer hover:bg-white/10 rounded"
+              className="flex items-center gap-3 p-3 rounded-lg hover:bg-white/10 cursor-pointer transition"
             >
               {item.type === 'folder'
                 ? <Folder size={18} className="text-yellow-400" />
@@ -263,20 +250,21 @@ const DocHub = () => {
 
       </div>
 
-      <div className="flex-1 p-6 flex flex-col">
+      <div className="flex-1 flex flex-col">
+
         {selectedFile ? (
           <>
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-white/10 bg-[#0f172a]">
               <h2 className="text-lg font-semibold">{selectedFile.filename}</h2>
 
               <div className="flex gap-2">
-                <button onClick={saveFile} className="px-3 py-1 bg-blue-600 rounded text-sm">
+                <button onClick={saveFile} className="px-4 py-1 bg-blue-600 rounded text-sm">
                   Save
                 </button>
 
                 <button
                   onClick={uploadToDrive}
-                  className="px-3 py-1 bg-green-600 rounded text-sm flex items-center gap-1"
+                  className="px-4 py-1 bg-green-600 rounded text-sm flex items-center gap-1"
                 >
                   <Upload size={16} />
                   Drive
@@ -284,21 +272,25 @@ const DocHub = () => {
               </div>
             </div>
 
-            <div className="bg-white text-black rounded p-4 flex-1 overflow-auto">
-              <EditorContent editor={editor} />
+            <div className="flex-1 p-6 overflow-auto">
+              <div className="bg-white text-black max-w-4xl mx-auto rounded-xl shadow p-6 min-h-[600px]">
+                <EditorContent editor={editor} />
+              </div>
             </div>
           </>
         ) : (
-          <div className="flex items-center justify-center h-full text-gray-500">
-            Select a file
+          <div className="flex flex-col items-center justify-center h-full text-gray-500">
+            <FileText size={40} />
+            <p className="mt-2">Select or create a document</p>
           </div>
         )}
+
       </div>
 
       {menu && (
         <div
           style={{ top: menu.y, left: menu.x }}
-          className="fixed bg-black border border-white/10 rounded shadow-lg z-50"
+          className="fixed bg-[#111827] border border-white/10 rounded-lg shadow-lg z-50"
         >
           <div onClick={renameItem} className="px-4 py-2 hover:bg-white/10 cursor-pointer text-sm">
             Rename
