@@ -8,24 +8,33 @@ const extractTextFromBuffer = async (buffer, mimetype) => {
     try {
         if (mimetype === 'application/pdf') {
             
-            // 1. Hunt for the actual extraction function safely
-            let parsePDF = null;
-            if (typeof pdfParse === 'function') {
-                parsePDF = pdfParse;
-            } else if (pdfParse && typeof pdfParse.default === 'function') {
-                parsePDF = pdfParse.default;
-            } else {
-                // If it is STILL broken, log exactly what it is to the Render console
-                console.error("=== PDF-PARSE DEBUG INFO ===");
-                console.error("Export Type:", typeof pdfParse);
-                console.error("Export Content:", pdfParse);
-                console.error("============================");
-                throw new Error(`pdf-parse package is corrupted. Check Render Logs. Export type: ${typeof pdfParse}`);
+            // 1. Handle the NEW pdf-parse v2+ API (Class-based)
+            if (pdfParse && typeof pdfParse.PDFParse === 'function') {
+                const parser = new pdfParse.PDFParse({ data: buffer });
+                try {
+                    const result = await parser.getText();
+                    // Handle varying return formats
+                    return typeof result === 'string' ? result : result.text;
+                } finally {
+                    // v2 requires manual cleanup to prevent memory leaks on your server
+                    if (typeof parser.destroy === 'function') {
+                        await parser.destroy();
+                    }
+                }
+            } 
+            // 2. Handle the CLASSIC pdf-parse v1 API (Function-based)
+            else if (typeof pdfParse === 'function') {
+                const data = await pdfParse(buffer);
+                return data.text;
+            } 
+            // 3. Handle transpiled default exports
+            else if (pdfParse && typeof pdfParse.default === 'function') {
+                const data = await pdfParse.default(buffer);
+                return data.text;
+            } 
+            else {
+                throw new Error("Unable to initialize PDF parser. Unrecognized export format.");
             }
-
-            // 2. Extract the text
-            const data = await parsePDF(buffer);
-            return data.text;
         } 
         else if (mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
             // .docx files
