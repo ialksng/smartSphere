@@ -122,7 +122,7 @@ export default function Dashboard() {
     if (!doc.isExternal) {
       setShowDropdown(false);
       setSearch("");
-      navigate('/dochub', { state: { docId: doc._id } });
+      navigate('/editor', { state: { docId: doc._id } });
       return;
     }
 
@@ -151,7 +151,7 @@ export default function Dashboard() {
       if (data.insight) {
         setShowDropdown(false);
         setSearch("");
-        navigate('/dochub', { state: { docId: data.insight._id } });
+        navigate('/editor', { state: { docId: data.insight._id } });
       } else {
         alert(data.message || "Failed to import file");
       }
@@ -303,7 +303,7 @@ export default function Dashboard() {
               <div
                 key={doc._id}
                 onClick={() =>
-                  navigate('/dochub', { state: { docId: doc._id } })
+                  navigate('/editor', { state: { docId: doc._id } })
                 }
                 className="p-4 rounded-xl bg-white/5 hover:bg-white/10 cursor-pointer border border-white/10 transition-colors"
               >

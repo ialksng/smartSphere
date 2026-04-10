@@ -4,6 +4,7 @@ import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
 import GoogleDriveHub from './pages/GoogleDriveHub';
 import DocHub from './pages/DocHub';
+import DocEditor from './pages/DocEditor';
 import CloudHub from './pages/CloudHub';
 import BuddyBot from './pages/BuddyBot';
 import MyStorage from './pages/MyStorage';
@@ -70,6 +71,15 @@ function App() {
           element={
             <ProtectedLayout>
               <DocHub />
+            </ProtectedLayout>
+          } 
+        />
+
+        <Route 
+          path="/editor" 
+          element={
+            <ProtectedLayout>
+              <DocEditor />
             </ProtectedLayout>
           } 
         />
