@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Cloud, FileText, Loader2, ArrowLeft,
   Search, Folder, ChevronRight,
-  ExternalLink, DownloadCloud
+  ExternalLink, DownloadCloud, Eye
 } from 'lucide-react';
 
 export default function GoogleDriveHub() {
@@ -58,7 +58,7 @@ export default function GoogleDriveHub() {
     fetchDriveData(id);
   };
 
-  // 🔥 IMPROVED IMPORT
+  // 🔥 IMPORT + OPTION TO OPEN IN DOCHUB
   const handleImportFile = async (fileId, fileName, mimeType) => {
     try {
       setImportingFileId(fileId);
@@ -76,13 +76,16 @@ export default function GoogleDriveHub() {
 
       const data = await res.json();
 
-      // 🔥 SUCCESS → REDIRECT TO DOCHUB
-      alert(`Imported "${fileName}" successfully!`);
-      navigate('/dochub');
+      // 🔥 BETTER UX → CONFIRM ACTION
+      const openNow = window.confirm(`"${fileName}" imported.\n\nOpen in DocHub?`);
+
+      if (openNow) {
+        navigate('/dochub', { state: { docId: data.insight._id } });
+      }
 
     } catch (err) {
       console.error(err);
-      alert("Import failed. Try again.");
+      alert("Import failed");
     } finally {
       setImportingFileId(null);
     }
@@ -111,7 +114,7 @@ export default function GoogleDriveHub() {
                 Google Drive
               </h1>
               <p className="text-gray-400 text-sm">
-                Browse and import files into your AI workspace
+                Browse, import, and open files in DocHub
               </p>
             </div>
           </div>
@@ -135,7 +138,7 @@ export default function GoogleDriveHub() {
               setIsSearching(true);
               fetchDriveData(null, searchTerm);
             }}
-            className="px-5 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl text-sm font-medium"
+            className="px-5 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl text-sm"
           >
             Search
           </button>
@@ -183,13 +186,6 @@ export default function GoogleDriveHub() {
               </button>
             </div>
           ))}
-
-          {currentFolder.id !== 'root' && (
-            <>
-              <ChevronRight size={14} />
-              <span className="text-blue-400">{currentFolder.name}</span>
-            </>
-          )}
         </div>
 
         {/* CONTENT */}
@@ -203,67 +199,61 @@ export default function GoogleDriveHub() {
             <>
               {/* FOLDERS */}
               {folders.length > 0 && (
-                <>
-                  <h3 className="text-xs uppercase text-gray-400 mb-3">Folders</h3>
-                  <div className="grid md:grid-cols-4 gap-4 mb-6">
-                    {folders.map(folder => (
-                      <div
-                        key={folder.id}
-                        onClick={() => handleFolderClick(folder.id, folder.name)}
-                        className="cursor-pointer p-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition"
-                      >
-                        <Folder className="text-emerald-400 mb-2" />
-                        <p className="text-sm truncate">{folder.name}</p>
-                      </div>
-                    ))}
-                  </div>
-                </>
+                <div className="grid md:grid-cols-4 gap-4 mb-6">
+                  {folders.map(folder => (
+                    <div
+                      key={folder.id}
+                      onClick={() => handleFolderClick(folder.id, folder.name)}
+                      className="cursor-pointer p-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10"
+                    >
+                      <Folder className="text-emerald-400 mb-2" />
+                      <p className="text-sm truncate">{folder.name}</p>
+                    </div>
+                  ))}
+                </div>
               )}
 
               {/* FILES */}
-              {files.length > 0 && (
-                <>
-                  <h3 className="text-xs uppercase text-gray-400 mb-3">Files</h3>
-                  <div className="space-y-3">
-                    {files.map(file => (
-                      <div
-                        key={file.id}
-                        className="flex justify-between items-center p-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10"
-                      >
-                        <div className="flex items-center gap-3">
-                          <FileText className="text-blue-400" />
-                          <div>
-                            <p className="text-sm">{file.name}</p>
-                            <p className="text-xs text-gray-500">
-                              {new Date(file.modifiedTime).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex gap-2">
-                          {file.webViewLink && (
-                            <a
-                              href={file.webViewLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              <ExternalLink size={16} />
-                            </a>
-                          )}
-
-                          <button
-                            onClick={() => handleImportFile(file.id, file.name, file.mimeType)}
-                          >
-                            {importingFileId === file.id
-                              ? <Loader2 className="animate-spin" size={16} />
-                              : <DownloadCloud size={16} />}
-                          </button>
-                        </div>
+              <div className="space-y-3">
+                {files.map(file => (
+                  <div
+                    key={file.id}
+                    className="flex justify-between items-center p-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10"
+                  >
+                    <div className="flex items-center gap-3">
+                      <FileText className="text-blue-400" />
+                      <div>
+                        <p className="text-sm">{file.name}</p>
+                        <p className="text-xs text-gray-500">
+                          {new Date(file.modifiedTime).toLocaleDateString()}
+                        </p>
                       </div>
-                    ))}
+                    </div>
+
+                    {/* 🔥 ACTIONS */}
+                    <div className="flex items-center gap-3">
+
+                      {/* Open in Drive */}
+                      {file.webViewLink && (
+                        <a href={file.webViewLink} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink size={16} />
+                        </a>
+                      )}
+
+                      {/* Import */}
+                      <button
+                        onClick={() => handleImportFile(file.id, file.name, file.mimeType)}
+                      >
+                        {importingFileId === file.id
+                          ? <Loader2 className="animate-spin" size={16} />
+                          : <DownloadCloud size={16} />}
+                      </button>
+
+                    </div>
                   </div>
-                </>
-              )}
+                ))}
+              </div>
+
             </>
           )}
         </div>
