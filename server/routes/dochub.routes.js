@@ -6,6 +6,33 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
+const MAX_STORAGE = 500 * 1024 * 1024;
+
+const getUsedStorage = async (userId) => {
+    const result = await Insight.aggregate([
+        { $match: { userId, isTrashed: false } },
+        {
+            $group: {
+                _id: null,
+                total: { $sum: "$size" }
+            }
+        }
+    ]);
+    return result[0]?.total || 0;
+};
+
+const checkStorage = async (userId, newSize) => {
+    const used = await getUsedStorage(userId);
+    return used + newSize <= MAX_STORAGE;
+};
+
+const getContentType = (mime) => {
+    if (!mime) return 'text';
+    if (mime.includes('pdf')) return 'pdf';
+    if (mime.includes('image')) return 'image';
+    return 'text';
+};
+
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         const dir = 'uploads/';
@@ -23,12 +50,11 @@ router.get('/', verifyToken, async (req, res) => {
     try {
         const { parentId } = req.query;
 
-        const query = {
+        const docs = await Insight.find({
             userId: req.user.id,
-            parentId: parentId || null
-        };
-
-        const docs = await Insight.find(query).sort({ type: -1, createdAt: -1 });
+            parentId: parentId || null,
+            isTrashed: false
+        }).sort({ type: -1, createdAt: -1 });
 
         res.json(docs);
     } catch (err) {
@@ -39,19 +65,15 @@ router.get('/', verifyToken, async (req, res) => {
 router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
     try {
         const file = req.file;
-
         const size = file.size;
 
-        const totalSize = await Insight.aggregate([
-            { $match: { userId: req.user.id } },
-            { $group: { _id: null, total: { $sum: "$size" } } }
-        ]);
+        const allowed = await checkStorage(req.user.id, size);
 
-        const used = totalSize[0]?.total || 0;
-
-        if (used + size > 500 * 1024 * 1024) {
+        if (!allowed) {
             return res.status(400).json({ message: "Storage limit exceeded (500MB)" });
         }
+
+        const mimeType = file.mimetype;
 
         const doc = await Insight.create({
             userId: req.user.id,
@@ -60,6 +82,8 @@ router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
             filePath: file.path,
             size,
             fileType: path.extname(file.originalname),
+            mimeType,
+            contentType: getContentType(mimeType),
             source: 'local'
         });
 
@@ -77,8 +101,7 @@ router.post('/folder', verifyToken, async (req, res) => {
             userId: req.user.id,
             filename: name,
             type: 'folder',
-            parentId: parentId || null,
-            content: ""
+            parentId: parentId || null
         });
 
         res.json(folder);
@@ -93,13 +116,20 @@ router.post('/file', verifyToken, async (req, res) => {
 
         const size = Buffer.byteLength(content || '', 'utf8');
 
+        const allowed = await checkStorage(req.user.id, size);
+
+        if (!allowed) {
+            return res.status(400).json({ message: "Storage limit exceeded (500MB)" });
+        }
+
         const doc = await Insight.create({
             userId: req.user.id,
             filename,
             content: content || "",
             type: 'file',
             parentId: parentId || null,
-            size
+            size,
+            contentType: 'text'
         });
 
         res.json(doc);
@@ -119,6 +149,10 @@ router.get('/:id', verifyToken, async (req, res) => {
             return res.status(404).json({ message: 'Not found' });
         }
 
+        await Insight.findByIdAndUpdate(req.params.id, {
+            lastOpened: new Date()
+        });
+
         res.json(doc);
     } catch (err) {
         res.status(500).json({ message: err.message });
@@ -129,6 +163,12 @@ router.put('/:id', verifyToken, async (req, res) => {
     try {
         const content = req.body.content || "";
         const size = Buffer.byteLength(content, 'utf8');
+
+        const allowed = await checkStorage(req.user.id, size);
+
+        if (!allowed) {
+            return res.status(400).json({ message: "Storage limit exceeded (500MB)" });
+        }
 
         const updated = await Insight.findOneAndUpdate(
             { _id: req.params.id, userId: req.user.id },
@@ -176,21 +216,18 @@ router.patch('/:id/move', verifyToken, async (req, res) => {
 
 router.delete('/:id', verifyToken, async (req, res) => {
     try {
-        const doc = await Insight.findOne({ _id: req.params.id, userId: req.user.id });
+        await Insight.updateMany(
+            {
+                userId: req.user.id,
+                $or: [
+                    { _id: req.params.id },
+                    { parentId: req.params.id }
+                ]
+            },
+            { isTrashed: true }
+        );
 
-        if (doc?.filePath && fs.existsSync(doc.filePath)) {
-            fs.unlinkSync(doc.filePath);
-        }
-
-        await Insight.deleteMany({
-            userId: req.user.id,
-            $or: [
-                { _id: req.params.id },
-                { parentId: req.params.id }
-            ]
-        });
-
-        res.json({ message: 'Deleted' });
+        res.json({ message: 'Moved to trash' });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }

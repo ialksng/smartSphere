@@ -9,6 +9,23 @@ const Insight = require('../models/Insight');
 
 const router = express.Router();
 
+const MAX_STORAGE = 500 * 1024 * 1024;
+
+const checkStorage = async (userId, newSize) => {
+    const result = await Insight.aggregate([
+        { $match: { userId, isTrashed: false } },
+        {
+            $group: {
+                _id: null,
+                total: { $sum: "$size" }
+            }
+        }
+    ]);
+
+    const used = result[0]?.total || 0;
+    return used + newSize <= MAX_STORAGE;
+};
+
 const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
@@ -118,6 +135,13 @@ router.post('/google/import', verifyToken, async (req, res) => {
         const extractedText = await extractTextFromBuffer(fileBuffer, finalMimeType);
         const cleanText = extractedText?.replace(/\s+/g, ' ').trim() || '';
 
+        const size = Buffer.byteLength(cleanText, 'utf8');
+
+        const allowed = await checkStorage(req.user.id, size);
+        if (!allowed) {
+            return res.status(400).json({ message: "Storage limit exceeded (500MB)" });
+        }
+
         const summary = await analyzeText(
             `Summarize in 2 sentences:\n\n${cleanText.substring(0, 3000)}`,
             "You are a helpful document summarizer."
@@ -129,6 +153,7 @@ router.post('/google/import', verifyToken, async (req, res) => {
             fileType: finalMimeType,
             content: cleanText,
             summary,
+            size,
             source: 'google_drive',
             driveFileId: fileId,
             contentType: finalMimeType.includes('pdf')
@@ -152,7 +177,6 @@ router.post('/google/upload-dochub', verifyToken, async (req, res) => {
         const { fileId } = req.body;
 
         const file = await Insight.findById(fileId);
-
         const user = await User.findById(req.user.id);
 
         if (!file || file.userId.toString() !== req.user.id) {
@@ -166,13 +190,15 @@ router.post('/google/upload-dochub', verifyToken, async (req, res) => {
         oauth2Client.setCredentials(user.googleTokens);
         const drive = google.drive({ version: 'v3', auth: oauth2Client });
 
+        const mimeType = file.mimeType || 'text/plain';
+
         const response = await drive.files.create({
             requestBody: {
                 name: file.filename,
-                mimeType: 'text/plain'
+                mimeType
             },
             media: {
-                mimeType: 'text/plain',
+                mimeType,
                 body: file.content || ''
             }
         });
@@ -184,49 +210,6 @@ router.post('/google/upload-dochub', verifyToken, async (req, res) => {
         });
 
         res.json({ message: 'Upload successful', file: response.data });
-    } catch {
-        res.status(500).json({ message: 'Upload failed' });
-    }
-});
-
-router.post('/google/upload-local', verifyToken, async (req, res) => {
-    try {
-        const { fileId } = req.body;
-
-        const file = await Insight.findById(fileId);
-        const user = await User.findById(req.user.id);
-
-        if (!file || file.userId.toString() !== req.user.id) {
-            return res.status(404).json({ message: 'File not found' });
-        }
-
-        if (!user?.googleTokens) {
-            return res.status(401).json({ message: 'Google Drive not connected' });
-        }
-
-        if (!file.filePath || !fs.existsSync(file.filePath)) {
-            return res.status(400).json({ message: 'Local file not found on server' });
-        }
-
-        oauth2Client.setCredentials(user.googleTokens);
-        const drive = google.drive({ version: 'v3', auth: oauth2Client });
-
-        const response = await drive.files.create({
-            requestBody: {
-                name: file.filename
-            },
-            media: {
-                body: fs.createReadStream(file.filePath)
-            }
-        });
-
-        await Insight.findByIdAndUpdate(fileId, {
-            driveFileId: response.data.id,
-            fileUrl: `https://drive.google.com/file/d/${response.data.id}/view`,
-            source: 'google_drive'
-        });
-
-        res.json({ message: 'Uploaded to Drive', file: response.data });
     } catch {
         res.status(500).json({ message: 'Upload failed' });
     }

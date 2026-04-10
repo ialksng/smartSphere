@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FileText, Star, Trash2, Plus, Search, Cloud } from "lucide-react";
+import { FileText, Star, Trash2, Plus, Search, Cloud, Save } from "lucide-react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 
@@ -7,17 +7,26 @@ const DocHub = () => {
   const [items, setItems] = useState([]);
   const [view, setView] = useState("home");
   const [selectedFile, setSelectedFile] = useState(null);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const editor = useEditor({
     extensions: [StarterKit],
-    content: selectedFile?.content || ""
+    content: ""
   });
 
   useEffect(() => {
     fetchItems();
   }, []);
 
+  useEffect(() => {
+    if (editor && selectedFile) {
+      editor.commands.setContent(selectedFile.content || "");
+    }
+  }, [selectedFile, editor]);
+
   const fetchItems = async () => {
+    setLoading(true);
     const res = await fetch("/projects/smartsphere/api/dochub", {
       headers: {
         Authorization: `Bearer ${localStorage.getItem("sphere_token")}`
@@ -25,6 +34,7 @@ const DocHub = () => {
     });
     const data = await res.json();
     setItems(data || []);
+    setLoading(false);
   };
 
   const getSourceIcon = (source) => {
@@ -34,30 +44,22 @@ const DocHub = () => {
   };
 
   const createFile = async () => {
-    const type = prompt("Create in: local / google / onedrive");
-    if (!type) return;
+    const name = prompt("File name");
+    if (!name) return;
 
-    if (type === "local") {
-      const name = prompt("File name");
-      if (!name) return;
+    await fetch("/projects/smartsphere/api/dochub/file", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("sphere_token")}`
+      },
+      body: JSON.stringify({ filename: name, content: "" })
+    });
 
-      await fetch("/projects/smartsphere/api/dochub/file", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("sphere_token")}`
-        },
-        body: JSON.stringify({ filename: name, content: "" })
-      });
-
-      fetchItems();
-    } else {
-      alert(`Cloud creation (${type}) coming next`);
-    }
+    fetchItems();
   };
 
   const openFile = async (file) => {
-
     if (file.source === "google_drive" && file.fileUrl) {
       window.open(file.fileUrl, "_blank");
       return;
@@ -72,10 +74,23 @@ const DocHub = () => {
     const data = await res.json();
     setSelectedFile(data);
     setView("editor");
+  };
 
-    if (editor) {
-      editor.commands.setContent(data.content || "");
-    }
+  const saveFile = async () => {
+    if (!selectedFile || !editor) return;
+
+    await fetch(`/projects/smartsphere/api/dochub/${selectedFile._id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("sphere_token")}`
+      },
+      body: JSON.stringify({
+        content: editor.getHTML()
+      })
+    });
+
+    alert("Saved");
   };
 
   const downloadFile = (file) => {
@@ -87,53 +102,9 @@ const DocHub = () => {
     a.click();
   };
 
-  const uploadToDrive = async (file) => {
-    await fetch("/projects/smartsphere/api/cloud/google/upload-dochub", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${localStorage.getItem("sphere_token")}`
-      },
-      body: JSON.stringify({ fileId: file._id })
-    });
-
-    alert("Uploaded to Google Drive");
-  };
-
-  const summarizeFile = async () => {
-    const res = await fetch("/projects/smartsphere/api/ai/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${localStorage.getItem("sphere_token")}`
-      },
-      body: JSON.stringify({
-        message: `Summarize:\n\n${selectedFile.content}`
-      })
-    });
-
-    const data = await res.json();
-    alert(data.reply);
-  };
-
-  const askBuddy = async () => {
-    const question = prompt("Ask something");
-    if (!question) return;
-
-    const res = await fetch("/projects/smartsphere/api/ai/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${localStorage.getItem("sphere_token")}`
-      },
-      body: JSON.stringify({
-        message: `Context:\n${selectedFile.content}\n\nQuestion:\n${question}`
-      })
-    });
-
-    const data = await res.json();
-    alert(data.reply);
-  };
+  const filteredItems = items.filter(f =>
+    f.filename.toLowerCase().includes(search.toLowerCase())
+  );
 
   if (view === "editor" && selectedFile) {
     return (
@@ -143,21 +114,17 @@ const DocHub = () => {
           ← Back
         </button>
 
-        <h2 className="text-xl mb-4">{selectedFile.filename}</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl">{selectedFile.filename}</h2>
 
-        <div className="flex gap-2 mb-4">
-          <button onClick={summarizeFile} className="bg-purple-600 px-3 py-1 rounded">
-            Summarize
-          </button>
-
-          <button onClick={askBuddy} className="bg-green-600 px-3 py-1 rounded">
-            Ask Buddy
+          <button onClick={saveFile} className="flex items-center gap-1 bg-blue-600 px-3 py-1 rounded">
+            <Save size={16} /> Save
           </button>
         </div>
 
-        {selectedFile.contentType === "pdf" ? (
+        {selectedFile.contentType === "pdf" && selectedFile.fileUrl ? (
           <iframe src={selectedFile.fileUrl} className="w-full h-[80vh]" />
-        ) : selectedFile.contentType === "image" ? (
+        ) : selectedFile.contentType === "image" && selectedFile.fileUrl ? (
           <img src={selectedFile.fileUrl} className="max-h-[80vh] mx-auto" />
         ) : (
           <EditorContent
@@ -178,29 +145,39 @@ const DocHub = () => {
           ← Back
         </button>
 
-        <h2 className="text-xl mb-6">All Files</h2>
+        <h2 className="text-xl mb-4">All Files</h2>
 
-        <div className="space-y-3">
-          {items.map(file => (
-            <div
-              key={file._id}
-              className="p-4 bg-white/5 border border-white/10 rounded-lg flex justify-between"
-            >
-              <div>
-                <p>{file.filename}</p>
-                <p className="text-xs text-gray-400">
-                  {getSourceIcon(file.source)} {file.source || "local"} • {file.size || 0} B
-                </p>
-              </div>
+        <input
+          placeholder="Search files..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="mb-4 p-2 w-full bg-white/10 rounded"
+        />
 
-              <div className="flex gap-2 text-sm">
-                <button onClick={() => openFile(file)}>Open</button>
-                <button onClick={() => downloadFile(file)}>Download</button>
-                <button onClick={() => uploadToDrive(file)}>Drive</button>
+        {loading ? (
+          <p>Loading...</p>
+        ) : (
+          <div className="space-y-3">
+            {filteredItems.map(file => (
+              <div
+                key={file._id}
+                className="p-4 bg-white/5 border border-white/10 rounded-lg flex justify-between"
+              >
+                <div>
+                  <p>{file.filename}</p>
+                  <p className="text-xs text-gray-400">
+                    {getSourceIcon(file.source)} {file.source} • {file.size || 0} B
+                  </p>
+                </div>
+
+                <div className="flex gap-2 text-sm">
+                  <button onClick={() => openFile(file)}>Open</button>
+                  <button onClick={() => downloadFile(file)}>Download</button>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
       </div>
     );
@@ -211,7 +188,12 @@ const DocHub = () => {
 
       <div className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-lg mb-8 max-w-xl">
         <Search size={16} />
-        <input placeholder="Search..." className="bg-transparent outline-none w-full" />
+        <input
+          placeholder="Search..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="bg-transparent outline-none w-full"
+        />
       </div>
 
       <div className="grid md:grid-cols-4 gap-6">
@@ -221,12 +203,12 @@ const DocHub = () => {
           <h3 className="mt-2">New Document</h3>
         </div>
 
-        <div className="p-6 bg-white/5 rounded-xl cursor-pointer">
+        <div className="p-6 bg-white/5 rounded-xl">
           <Star />
           <h3 className="mt-2">Favorites</h3>
         </div>
 
-        <div className="p-6 bg-white/5 rounded-xl cursor-pointer">
+        <div className="p-6 bg-white/5 rounded-xl">
           <Trash2 />
           <h3 className="mt-2">Trash</h3>
         </div>
