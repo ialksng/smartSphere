@@ -1,12 +1,18 @@
 import { useEffect, useState } from "react";
 import { Folder, FileText, Upload, ArrowLeft } from "lucide-react";
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
 
 const DocHub = () => {
   const [items, setItems] = useState([]);
   const [currentFolder, setCurrentFolder] = useState(null);
   const [folderStack, setFolderStack] = useState([]);
-  const [content, setContent] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
+
+  const editor = useEditor({
+    extensions: [StarterKit],
+    content: "",
+  });
 
   useEffect(() => {
     fetchItems();
@@ -77,11 +83,16 @@ const DocHub = () => {
 
     const data = await res.json();
     setSelectedFile(data);
-    setContent(data.content || "");
+
+    if (editor) {
+      editor.commands.setContent(data.content || "");
+    }
   };
 
   const saveFile = async () => {
-    if (!selectedFile) return;
+    if (!selectedFile || !editor) return;
+
+    const html = editor.getHTML();
 
     await fetch(`/projects/smartsphere/api/dochub/${selectedFile._id}`, {
       method: "PUT",
@@ -89,7 +100,7 @@ const DocHub = () => {
         "Content-Type": "application/json",
         Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
       },
-      body: JSON.stringify({ content })
+      body: JSON.stringify({ content: html })
     });
   };
 
@@ -108,7 +119,6 @@ const DocHub = () => {
 
       alert("Uploaded to Google Drive");
     } catch (err) {
-      console.error(err);
       alert("Upload failed");
     }
   };
@@ -124,10 +134,7 @@ const DocHub = () => {
         </div>
 
         {currentFolder && (
-          <button
-            onClick={goBack}
-            className="flex items-center gap-2 text-sm mb-3 text-gray-400"
-          >
+          <button onClick={goBack} className="flex items-center gap-2 text-sm mb-3 text-gray-400">
             <ArrowLeft size={16} />
             Back
           </button>
@@ -150,18 +157,15 @@ const DocHub = () => {
 
       </div>
 
-      <div className="flex-1 p-4 flex flex-col">
+      <div className="flex-1 p-6 flex flex-col">
 
         {selectedFile ? (
           <>
-            <div className="flex justify-between items-center mb-3">
+            <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-semibold">{selectedFile.filename}</h2>
 
               <div className="flex gap-2">
-                <button
-                  onClick={saveFile}
-                  className="px-3 py-1 bg-blue-600 rounded text-sm"
-                >
+                <button onClick={saveFile} className="px-3 py-1 bg-blue-600 rounded text-sm">
                   Save
                 </button>
 
@@ -175,11 +179,9 @@ const DocHub = () => {
               </div>
             </div>
 
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              className="w-full flex-1 bg-transparent border border-white/10 rounded p-3 outline-none resize-none"
-            />
+            <div className="bg-white text-black rounded p-4 flex-1 overflow-auto">
+              <EditorContent editor={editor} />
+            </div>
           </>
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500">

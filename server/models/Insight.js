@@ -14,15 +14,20 @@ const insightSchema = new mongoose.Schema({
 
   content: {
     type: String,
-    required: true
+    default: "",
+    required: function () {
+      return this.type === 'file';
+    }
   },
 
   summary: {
-    type: String
+    type: String,
+    default: ""
   },
 
   fileType: {
-    type: String
+    type: String,
+    default: "text"
   },
 
   contentType: {
