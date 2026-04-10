@@ -65,8 +65,8 @@ export default function MyStorage() {
     const name = prompt("Enter folder name:");
     if (!name) return;
 
-    // FIX: Changed endpoint to /api/folder and payload key to 'parent'
-    await fetch('/projects/smartsphere/api/folder', {
+    // FIX: Changed endpoint to /api/folders (plural) to match server.js
+    await fetch('/projects/smartsphere/api/folders', {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -125,11 +125,10 @@ export default function MyStorage() {
         return;
     }
 
-    // FIX: Ask user for destination folder ID
+    // Ask user for destination folder ID
     const targetDriveFolderId = prompt("Enter Google Drive Folder ID to save to (leave blank for root):") || "root";
 
     try {
-      // FIX: Updated endpoint and added itemId, type, and driveFolderId to payload
       const res = await fetch('/projects/smartsphere/api/cloud/google/upload-local', {
         method: "POST",
         headers: {
@@ -229,7 +228,7 @@ export default function MyStorage() {
   };
 
   const openFile = (file) => {
-    // FIX: Changed fileId to docId to match what DocEditor.jsx expects
+    // FIX: Pass docId to correctly open in DocEditor
     navigate('/doceditor', { state: { docId: file._id } });
   };
 

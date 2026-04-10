@@ -1,11 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { Send, Paperclip, Loader2, FileText, FileUp, HardDrive, Cloud, X, Box, ChevronRight, Folder } from 'lucide-react';
 
-export default function ChatInterface({ onInsightAdded }) {
+export default function ChatInterface({ onInsightAdded, initialFile }) {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+    
+    // Holds the hidden text of the currently active document to pass to the AI
+    const [activeContext, setActiveContext] = useState("");
     
     // Menu States
     const [showAttachMenu, setShowAttachMenu] = useState(false);
@@ -46,6 +49,29 @@ export default function ChatInterface({ onInsightAdded }) {
         fetchHistory();
     }, []);
 
+    // --- AUTO-LOAD PASSED INITIAL FILE ---
+    useEffect(() => {
+        if (initialFile) {
+            const fileName = initialFile.filename || initialFile.name;
+            const content = initialFile.content || "";
+            const summary = initialFile.summary || "";
+
+            // Inject the document text into the AI's hidden context
+            setActiveContext(`[Context Document Name: "${fileName}". Document Text: ${content ? content.substring(0, 3000) : "No text content"}]\n\n`);
+
+            setMessages(prev => {
+                const alreadyAdded = prev.some(msg => msg.type === 'file' && msg.fileName === fileName);
+                if (alreadyAdded) return prev;
+
+                return [
+                    ...prev,
+                    { role: 'user', type: 'file', fileName: fileName, text: `Attached from Storage: ${fileName}`, isSystem: true },
+                    { role: 'ai', text: `**Document Analyzed:** ${fileName}\n\n${summary ? "**Summary:**\n" + summary + "\n\n" : ""}I'm ready! Ask me anything about this document.` }
+                ];
+            });
+        }
+    }, [initialFile]);
+
     // --- AUTO-SCROLL ---
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -63,6 +89,8 @@ export default function ChatInterface({ onInsightAdded }) {
 
         try {
             const cleanHistory = newHistory.filter(msg => !msg.isSystem).slice(-15);
+            // Prepend the active document context to the user's prompt so the AI can read it
+            const contextPrefix = activeContext ? activeContext + "User Question: " : "";
 
             const res = await fetch('/projects/smartsphere/api/ai/chat', {
                 method: 'POST',
@@ -70,7 +98,7 @@ export default function ChatInterface({ onInsightAdded }) {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${localStorage.getItem('sphere_token')}`
                 },
-                body: JSON.stringify({ message: input, history: cleanHistory })
+                body: JSON.stringify({ message: contextPrefix + input, history: cleanHistory })
             });
             
             const data = await res.json();
@@ -111,6 +139,9 @@ export default function ChatInterface({ onInsightAdded }) {
             const data = await res.json();
             
             if (res.ok) {
+                // Update context with the returned text/summary
+                setActiveContext(`[Context Document Name: "${file.name}". Document Text: ${data.text ? data.text.substring(0, 3000) : data.summary}]\n\n`);
+
                 setMessages(prev => [
                     ...prev.slice(0, -1),
                     { role: 'user', type: 'file', fileName: file.name, text: `Attached: ${file.name}`, isSystem: true },
@@ -170,11 +201,30 @@ export default function ChatInterface({ onInsightAdded }) {
 
     const handleSelectMyStorageFile = async (file) => {
         setIsMyStorageModalOpen(false);
-        setMessages(prev => [
-            ...prev,
-            { role: 'user', type: 'file', fileName: file.filename, text: `Attached from Storage: ${file.filename}`, isSystem: true },
-            { role: 'ai', text: `I've acknowledged **${file.filename}** from your SmartSphere storage. What would you like to know about it?` }
-        ]);
+        setIsLoading(true);
+
+        try {
+            // Fetch the full file to ensure we get the content
+            const res = await fetch(`/projects/smartsphere/api/dochub/${file._id}`, {
+                headers: { Authorization: `Bearer ${localStorage.getItem('sphere_token')}` }
+            });
+            const fullFile = await res.json();
+            
+            const content = fullFile.content || "";
+            const summary = fullFile.summary || "";
+
+            setActiveContext(`[Context Document Name: "${fullFile.filename}". Document Text: ${content ? content.substring(0, 3000) : "No text content"}]\n\n`);
+
+            setMessages(prev => [
+                ...prev,
+                { role: 'user', type: 'file', fileName: fullFile.filename, text: `Attached from Storage: ${fullFile.filename}`, isSystem: true },
+                { role: 'ai', text: `**Document Analyzed:** ${fullFile.filename}\n\n${summary ? "**Summary:**\n" + summary + "\n\n" : ""}I'm ready! Ask me anything about this document.` }
+            ]);
+        } catch (err) {
+            setMessages(prev => [...prev, { role: 'ai', text: "Failed to load document content.", isSystem: true }]);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     // --- 3. GOOGLE DRIVE LOGIC ---
@@ -234,10 +284,16 @@ export default function ChatInterface({ onInsightAdded }) {
             const data = await res.json();
 
             if (res.ok) {
+                const insight = data.insight || {};
+                const content = insight.content || "";
+                const summary = insight.summary || "";
+
+                setActiveContext(`[Context Document Name: "${file.name}". Document Text: ${content ? content.substring(0, 3000) : "No text content"}]\n\n`);
+
                 setMessages(prev => [
                     ...prev.slice(0, -1),
                     { role: 'user', type: 'file', fileName: file.name, text: `Attached from Drive: ${file.name}`, isSystem: true },
-                    { role: 'ai', text: `I've successfully imported and analyzed **${file.name}**.\n\nSummary:\n${data.insight?.summary || 'File is ready for discussion.'}` }
+                    { role: 'ai', text: `I've successfully imported and analyzed **${file.name}**.\n\nSummary:\n${summary || 'File is ready for discussion.'}` }
                 ]);
                 if (onInsightAdded) onInsightAdded();
             } else {

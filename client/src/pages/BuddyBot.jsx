@@ -1,7 +1,12 @@
 import React from 'react';
+import { useLocation } from 'react-router-dom';
 import ChatInterface from '../components/ChatInterface';
 
 export default function BuddyBot() {
+  const location = useLocation();
+  // Capture the file if navigating from MyStorage
+  const importedFile = location.state?.importedFile || null;
+
   return (
     <div className="flex flex-col h-full p-4 md:p-8 max-w-5xl mx-auto w-full">
       <div className="mb-6">
@@ -13,7 +18,10 @@ export default function BuddyBot() {
       
       {/* Container that takes up the remaining height for the chat interface */}
       <div className="flex-1 min-h-0">
-        <ChatInterface onInsightAdded={() => console.log('New insight added!')} />
+        <ChatInterface 
+          initialFile={importedFile} 
+          onInsightAdded={() => console.log('New insight added!')} 
+        />
       </div>
     </div>
   );

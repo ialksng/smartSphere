@@ -50,7 +50,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-// GET ALL FILES (Updated to include Cloud drives when ?all=true)
+// GET ALL FILES
 router.get('/', verifyToken, async (req, res) => {
     try {
         const { folderId, isTrashed, isFavorite, all } = req.query;
@@ -102,7 +102,7 @@ router.get('/', verifyToken, async (req, res) => {
                     const gRes = await drive.files.list({
                         q: driveQuery,
                         fields: 'files(id, name, mimeType, size, starred)',
-                        pageSize: 50 // Keep a reasonable limit for frontend rendering
+                        pageSize: 50
                     });
                     
                     const gFiles = gRes.data.files.map(f => ({
@@ -162,6 +162,7 @@ router.get('/search', verifyToken, async (req, res) => {
         const user = await User.findById(req.user.id);
         let results = [];
 
+        // 1. Search Local
         const localDocs = await Insight.find({
             userId: req.user.id,
             isTrashed: false,
@@ -172,7 +173,7 @@ router.get('/search', verifyToken, async (req, res) => {
             ]
         })
         .sort({ createdAt: -1 })
-        .limit(10);
+        .limit(50); // Increased from 10 to 50
 
         results = [...localDocs.map(d => ({
             _id: d._id,
@@ -183,6 +184,7 @@ router.get('/search', verifyToken, async (req, res) => {
             isExternal: false
         }))];
 
+        // 2. Search Google Drive
         if (user?.googleTokens) {
             try {
                 const oauth2Client = new google.auth.OAuth2(
@@ -194,9 +196,10 @@ router.get('/search', verifyToken, async (req, res) => {
                 const drive = google.drive({ version: 'v3', auth: oauth2Client });
                 
                 const gRes = await drive.files.list({
-                    q: `name contains '${q}' and trashed = false`,
-                    fields: 'files(id, name, mimeType)',
-                    pageSize: 5
+                    // Ignored folders so it only pulls actual files
+                    q: `name contains '${q}' and trashed = false and mimeType != 'application/vnd.google-apps.folder'`,
+                    fields: 'files(id, name, mimeType, size)',
+                    pageSize: 50 // Increased from 5 to 50
                 });
                 
                 const gFiles = gRes.data.files.map(f => ({
@@ -204,6 +207,7 @@ router.get('/search', verifyToken, async (req, res) => {
                     filename: f.name,
                     source: 'google_drive_live',
                     mimeType: f.mimeType,
+                    size: parseInt(f.size) || 0,
                     isExternal: true
                 }));
                 results = [...results, ...gFiles];
@@ -212,11 +216,12 @@ router.get('/search', verifyToken, async (req, res) => {
             }
         }
 
+        // 3. Search OneDrive
         if (user?.microsoftTokens?.access_token) {
             try {
                 const msRes = await axios.get(`https://graph.microsoft.com/v1.0/me/drive/root/search(q='${q}')`, {
                     headers: { Authorization: `Bearer ${user.microsoftTokens.access_token}` },
-                    params: { $top: 5 }
+                    params: { $top: 50 } // Increased from 5 to 50
                 });
                 
                 const msFiles = msRes.data.value.map(f => ({
@@ -224,6 +229,7 @@ router.get('/search', verifyToken, async (req, res) => {
                     filename: f.name,
                     source: 'onedrive_live',
                     mimeType: f.file?.mimeType || 'unknown',
+                    size: f.size || 0,
                     isExternal: true
                 }));
                 results = [...results, ...msFiles];

@@ -15,11 +15,18 @@ const DocHub = () => {
   const [docLocation, setDocLocation] = useState("local");
   const [cloudProvider, setCloudProvider] = useState("google");
 
+  // Debounced Search & View Fetcher
   useEffect(() => {
-    if (view !== "home") {
-      fetchItems(view);
-    }
-  }, [view]);
+    const delayDebounceFn = setTimeout(() => {
+      if (search.trim() !== "") {
+        fetchSearchResults(search);
+      } else if (view !== "home") {
+        fetchItems(view);
+      }
+    }, 500); // Waits 500ms after typing stops before searching
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [search, view]);
 
   const fetchItems = async (currentView) => {
     setLoading(true);
@@ -43,9 +50,25 @@ const DocHub = () => {
     }
   };
 
+  // Dedicated function to hit the backend search API
+  const fetchSearchResults = async (query) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/projects/smartsphere/api/dochub/search?q=${encodeURIComponent(query)}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("sphere_token")}` }
+      });
+      const data = await res.json();
+      setItems(data || []);
+    } catch (err) {
+      console.error("Failed to search documents", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getSourceIcon = (source) => {
-    if (source === "google_drive") return "🟢";
-    if (source === "onedrive") return "🔵";
+    if (source === "google_drive" || source === "google_drive_live") return "🟢";
+    if (source === "onedrive" || source === "onedrive_live") return "🔵";
     return "💻";
   };
 
@@ -78,14 +101,12 @@ const DocHub = () => {
               "Content-Type": "application/json",
               Authorization: `Bearer ${localStorage.getItem("sphere_token")}`
             },
-            // Aligned payload with cloud.routes.js expectation
             body: JSON.stringify({ fileId: newFile._id }) 
         });
       }
 
       setIsModalOpen(false);
       setDocName("");
-      // Navigating using URL parameter for useParams()
       navigate(`/doceditor/${newFile._id}`);
 
     } catch (err) {
@@ -98,7 +119,6 @@ const DocHub = () => {
 
   // ---- FILE ACTIONS ----
   const openFile = (file) => {
-    // Navigating using URL parameter for useParams()
     navigate(`/doceditor/${file._id}`);
   };
 
@@ -121,7 +141,9 @@ const DocHub = () => {
         },
         body: JSON.stringify({ isFavorite: !file.isFavorite })
       });
-      fetchItems(view); // Refresh list
+      // Force refresh using current search or view
+      if (search) fetchSearchResults(search);
+      else fetchItems(view);
     } catch (err) {
       console.error("Failed to toggle favorite", err);
     }
@@ -129,7 +151,6 @@ const DocHub = () => {
 
   const toggleTrash = async (file, moveToTrash) => {
     try {
-      // Using DELETE method to match your dochub.routes.js logic for trashing
       if (moveToTrash) {
           await fetch(`/projects/smartsphere/api/dochub/${file._id}`, {
             method: "DELETE",
@@ -138,7 +159,6 @@ const DocHub = () => {
             }
           });
       } else {
-          // Note: Ensure your backend has a corresponding route/logic to restore from trash
           await fetch(`/projects/smartsphere/api/dochub/${file._id}`, {
             method: "PUT",
             headers: {
@@ -148,7 +168,8 @@ const DocHub = () => {
             body: JSON.stringify({ isTrashed: false })
           });
       }
-      fetchItems(view); // Refresh list
+      if (search) fetchSearchResults(search);
+      else fetchItems(view);
     } catch (err) {
       console.error("Failed to update trash status", err);
     }
@@ -163,45 +184,43 @@ const DocHub = () => {
           Authorization: `Bearer ${localStorage.getItem("sphere_token")}`
         }
       });
-      fetchItems(view); // Refresh list
+      if (search) fetchSearchResults(search);
+      else fetchItems(view);
     } catch (err) {
       console.error("Failed to delete file", err);
     }
   };
-
-  const filteredItems = items.filter(f =>
-    f.filename.toLowerCase().includes(search.toLowerCase())
-  );
 
   // ---- RENDER SUB-VIEWS (Files, Favorites, Trash) ----
   if (view !== "home") {
     let title = "All Files";
     if (view === "favorites") title = "Favorites";
     if (view === "trash") title = "Trash";
+    if (search.trim() !== "") title = `Search Results for "${search}"`;
 
     return (
       <div className="p-6 bg-[#0b0f19] text-white min-h-screen">
-        <button onClick={() => setView("home")} className="mb-4 text-blue-400 hover:text-blue-300">
+        <button onClick={() => { setView("home"); setSearch(""); }} className="mb-4 text-blue-400 hover:text-blue-300">
           ← Back to Hub
         </button>
 
         <h2 className="text-xl mb-4 font-semibold">{title}</h2>
 
         <input
-          placeholder="Search files..."
+          placeholder="Search all local and cloud files..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="mb-6 p-3 w-full bg-white/5 border border-white/10 rounded-xl outline-none focus:ring-1 focus:ring-blue-500"
         />
 
         {loading ? (
-          <p className="text-gray-400 animate-pulse">Loading documents...</p>
+          <p className="text-gray-400 animate-pulse">Searching documents...</p>
         ) : (
           <div className="space-y-3">
-            {filteredItems.length === 0 ? (
+            {items.length === 0 ? (
               <p className="text-gray-400">No files found.</p>
             ) : (
-              filteredItems.map(file => (
+              items.map(file => (
                 <div
                   key={file._id}
                   className="p-4 bg-white/5 border border-white/10 rounded-xl flex justify-between items-center hover:bg-white/10 transition-colors"
@@ -212,7 +231,8 @@ const DocHub = () => {
                       {file.isFavorite && <Star size={14} className="text-yellow-400" fill="currentColor" />}
                     </p>
                     <p className="text-xs text-gray-400 mt-1">
-                      {getSourceIcon(file.source)} <span className="uppercase">{file.source.replace('_', ' ')}</span> • {file.size || 0} Bytes
+                      {getSourceIcon(file.source)} <span className="uppercase">{file.source.replace(/_/g, ' ')}</span> 
+                      {file.size !== undefined && ` • ${file.size} Bytes`}
                     </p>
                   </div>
 
@@ -230,18 +250,23 @@ const DocHub = () => {
                     ) : (
                       /* IF IN FILES/FAVORITES VIEW */
                       <>
-                        <button onClick={() => toggleFavorite(file)} className="text-gray-400 hover:text-yellow-400 transition-colors" title="Toggle Favorite">
-                          <Star size={18} fill={file.isFavorite ? "currentColor" : "none"} className={file.isFavorite ? "text-yellow-400" : ""} />
-                        </button>
+                        {/* Only show Favorite and Trash buttons if it's a local file, since we aren't supporting starring cloud files yet */}
+                        {!file.isExternal && (
+                          <button onClick={() => toggleFavorite(file)} className="text-gray-400 hover:text-yellow-400 transition-colors" title="Toggle Favorite">
+                            <Star size={18} fill={file.isFavorite ? "currentColor" : "none"} className={file.isFavorite ? "text-yellow-400" : ""} />
+                          </button>
+                        )}
                         <button onClick={() => downloadFile(file)} className="text-gray-400 hover:text-white" title="Download">
                           <Download size={18} />
                         </button>
                         <button onClick={() => openFile(file)} className="text-blue-400 hover:text-blue-300">
                           Open Editor
                         </button>
-                        <button onClick={() => toggleTrash(file, true)} className="text-gray-400 hover:text-red-400 transition-colors" title="Move to Trash">
-                          <Trash2 size={18} />
-                        </button>
+                        {!file.isExternal && (
+                          <button onClick={() => toggleTrash(file, true)} className="text-gray-400 hover:text-red-400 transition-colors" title="Move to Trash">
+                            <Trash2 size={18} />
+                          </button>
+                        )}
                       </>
                     )}
                   </div>
@@ -257,12 +282,15 @@ const DocHub = () => {
   // ---- RENDER HOME VIEW ----
   return (
     <div className="p-8 bg-[#0b0f19] text-white min-h-screen relative">
-      <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-4 py-3 rounded-xl mb-8 max-w-xl">
+      <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-4 py-3 rounded-xl mb-8 max-w-xl focus-within:ring-1 focus-within:ring-blue-500 transition-all">
         <Search size={18} className="text-gray-400" />
         <input
-          placeholder="Search documents..."
+          placeholder="Search all local and cloud files..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            if (e.target.value.trim() !== "") setView("files");
+          }}
           className="bg-transparent outline-none w-full text-white placeholder-gray-400"
         />
       </div>
