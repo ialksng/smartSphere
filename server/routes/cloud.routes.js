@@ -52,7 +52,7 @@ router.get('/google/callback', async (req, res) => {
     }
 });
 
-// 3. Fetch Google Drive Files (FINAL MERGED VERSION)
+// 3. Fetch Google Drive Files (WITH SEARCH + BREADCRUMB SUPPORT)
 router.get('/google/files', verifyToken, async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
@@ -63,24 +63,33 @@ router.get('/google/files', verifyToken, async (req, res) => {
 
         oauth2Client.setCredentials(user.googleTokens);
         const drive = google.drive({ version: 'v3', auth: oauth2Client });
-        
+
+        const searchQuery = req.query.search || '';
         const targetFolderId = req.query.folderId || 'root';
-        
+
+        let query = `'${targetFolderId}' in parents and trashed = false`;
+
+        // 🔥 SEARCH MODE
+        if (searchQuery) {
+            query = `name contains '${searchQuery}' and trashed = false`;
+        }
+
         const response = await drive.files.list({
-            pageSize: 1000, // 🔥 increased limit
-            fields: 'files(id, name, mimeType, modifiedTime, webViewLink)', // 🔥 added webViewLink
-            q: `'${targetFolderId}' in parents and trashed = false`,
-            orderBy: 'folder, name' // 🔥 folders first, alphabetical
+            pageSize: 1000,
+            fields: 'files(id, name, mimeType, modifiedTime, webViewLink, parents)',
+            q: query,
+            orderBy: 'folder, name'
         });
 
         res.json(response.data.files);
+
     } catch (error) {
         console.error("Fetch Drive Files Error:", error);
         res.status(500).json({ message: "Failed to fetch files from Google Drive." });
     }
 });
 
-// 4. Download & Import File to AI
+// 4. Import File
 router.post('/google/import', verifyToken, async (req, res) => {
     try {
         const { fileId, fileName, mimeType } = req.body;
@@ -98,14 +107,14 @@ router.post('/google/import', verifyToken, async (req, res) => {
 
         if (mimeType === 'application/vnd.google-apps.document') {
             const response = await drive.files.export(
-                { fileId: fileId, mimeType: 'text/plain' }, 
+                { fileId, mimeType: 'text/plain' }, 
                 { responseType: 'arraybuffer' }
             );
             fileBuffer = Buffer.from(response.data);
-            finalMimeType = 'text/plain'; 
+            finalMimeType = 'text/plain';
         } else {
             const response = await drive.files.get(
-                { fileId: fileId, alt: 'media' }, 
+                { fileId, alt: 'media' }, 
                 { responseType: 'arraybuffer' }
             );
             fileBuffer = Buffer.from(response.data);
@@ -114,7 +123,7 @@ router.post('/google/import', verifyToken, async (req, res) => {
         const extractedText = await extractTextFromBuffer(fileBuffer, finalMimeType);
         const cleanText = extractedText.replace(/\s+/g, ' ').trim();
 
-        const prompt = `Please provide a concise 2-sentence summary of the following document:\n\n${cleanText.substring(0, 3000)}`;
+        const prompt = `Summarize in 2 sentences:\n\n${cleanText.substring(0, 3000)}`;
         const summary = await analyzeText(prompt, "You are a helpful document summarizer.");
 
         const newInsight = new Insight({
@@ -122,7 +131,7 @@ router.post('/google/import', verifyToken, async (req, res) => {
             filename: fileName,
             fileType: finalMimeType,
             content: cleanText,
-            summary: summary,
+            summary,
             source: 'googledrive'
         });
 
