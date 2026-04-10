@@ -1,61 +1,95 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { FileText, Trash2, Save, Download } from "lucide-react";
-import { Document, Page } from "react-pdf";
 
 export default function DocHub() {
+  const location = useLocation();
+
   const [docs, setDocs] = useState([]);
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [content, setContent] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchDocs();
   }, []);
 
   const fetchDocs = async () => {
-    const res = await fetch('/api/dochub', {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
+    try {
+      const res = await fetch('/projects/smartsphere/api/dochub', {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
+        }
+      });
+
+      if (!res.ok) throw new Error("Failed to fetch docs");
+
+      const data = await res.json();
+      setDocs(data);
+
+      // 🔥 AUTO OPEN DOC FROM DASHBOARD
+      if (location.state?.docId) {
+        openDoc(location.state.docId);
       }
-    });
-    const data = await res.json();
-    setDocs(data);
+
+    } catch (err) {
+      console.error("DocHub fetch error:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const openDoc = async (id) => {
-    const res = await fetch(`/api/dochub/${id}`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
-      }
-    });
+    try {
+      const res = await fetch(`/projects/smartsphere/api/dochub/${id}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
+        }
+      });
 
-    const data = await res.json();
-    setSelectedDoc(data);
-    setContent(data.content);
+      if (!res.ok) throw new Error("Failed to fetch doc");
+
+      const data = await res.json();
+      setSelectedDoc(data);
+      setContent(data.content || "");
+
+    } catch (err) {
+      console.error("Open doc error:", err);
+    }
   };
 
   const saveDoc = async () => {
-    await fetch(`/api/dochub/${selectedDoc._id}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
-      },
-      body: JSON.stringify({ content })
-    });
+    try {
+      await fetch(`/projects/smartsphere/api/dochub/${selectedDoc._id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
+        },
+        body: JSON.stringify({ content })
+      });
 
-    alert("Saved!");
+      alert("Saved!");
+    } catch (err) {
+      console.error(err);
+      alert("Save failed");
+    }
   };
 
   const deleteDoc = async () => {
-    await fetch(`/api/dochub/${selectedDoc._id}`, {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
-      }
-    });
+    try {
+      await fetch(`/projects/smartsphere/api/dochub/${selectedDoc._id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
+        }
+      });
 
-    setSelectedDoc(null);
-    fetchDocs();
+      setSelectedDoc(null);
+      fetchDocs();
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const downloadDoc = () => {
@@ -75,16 +109,22 @@ export default function DocHub() {
       <div className="w-80 border-r border-white/10 p-4 overflow-y-auto">
         <h2 className="font-bold mb-4">DocHub</h2>
 
-        {docs.map(doc => (
-          <div
-            key={doc._id}
-            onClick={() => openDoc(doc._id)}
-            className="p-3 rounded-lg hover:bg-white/10 cursor-pointer"
-          >
-            <FileText size={16} />
-            <p className="text-sm truncate">{doc.filename}</p>
-          </div>
-        ))}
+        {loading ? (
+          <p className="text-gray-400 text-sm">Loading...</p>
+        ) : docs.length === 0 ? (
+          <p className="text-gray-500 text-sm">No documents found</p>
+        ) : (
+          docs.map(doc => (
+            <div
+              key={doc._id}
+              onClick={() => openDoc(doc._id)}
+              className="p-3 rounded-lg hover:bg-white/10 cursor-pointer"
+            >
+              <FileText size={16} />
+              <p className="text-sm truncate">{doc.filename}</p>
+            </div>
+          ))
+        )}
       </div>
 
       {/* RIGHT PANEL */}
@@ -105,10 +145,10 @@ export default function DocHub() {
               </div>
             </div>
 
-            {/* SMART PREVIEW */}
+            {/* PREVIEW */}
             <div className="h-[80vh] bg-white/5 rounded-xl p-4 overflow-auto">
 
-              {/* TEXT EDITOR */}
+              {/* TEXT */}
               {selectedDoc.contentType === 'text' && (
                 <textarea
                   value={content}
@@ -117,26 +157,22 @@ export default function DocHub() {
                 />
               )}
 
-              {/* PDF VIEWER */}
-              {selectedDoc.contentType === 'pdf' && (
-                <div className="flex justify-center">
-                  <iframe
-                    src={selectedDoc.fileUrl}
-                    className="w-full h-[75vh] rounded"
-                    title="PDF Preview"
-                  />
-                </div>
+              {/* PDF */}
+              {selectedDoc.contentType === 'pdf' && selectedDoc.fileUrl && (
+                <iframe
+                  src={selectedDoc.fileUrl}
+                  className="w-full h-[75vh] rounded"
+                  title="PDF Preview"
+                />
               )}
 
-              {/* IMAGE VIEWER */}
-              {selectedDoc.contentType === 'image' && (
-                <div className="flex justify-center">
-                  <img
-                    src={selectedDoc.fileUrl}
-                    alt={selectedDoc.filename}
-                    className="max-h-[70vh] rounded-lg"
-                  />
-                </div>
+              {/* IMAGE */}
+              {selectedDoc.contentType === 'image' && selectedDoc.fileUrl && (
+                <img
+                  src={selectedDoc.fileUrl}
+                  alt={selectedDoc.filename}
+                  className="max-h-[70vh] mx-auto rounded-lg"
+                />
               )}
 
             </div>

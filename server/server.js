@@ -19,13 +19,15 @@ const apiRouter = express.Router();
 apiRouter.use('/auth', require('./routes/auth.routes'));
 apiRouter.use('/ai', require('./routes/ai.routes'));     
 apiRouter.use('/cloud', require('./routes/cloud.routes'));
+
+// 🔥 ADD THIS LINE (MOST IMPORTANT FIX)
+apiRouter.use('/dochub', require('./routes/dochub.routes'));
+
 apiRouter.get('/health', (req, res) => {
     res.json({ status: 'ok', message: 'Smart Sphere API is running' });
 });
 
-// MOUNT ON BOTH PATHS:
-// 1. /api for standard frontend calls
-// 2. /projects/smartsphere/api to catch the Google OAuth redirect on your custom domain
+// Mount API
 app.use('/api', apiRouter);
 app.use('/projects/smartsphere/api', apiRouter); 
 
@@ -39,7 +41,7 @@ app.get('/', (req, res) => {
     res.redirect('/projects/smartsphere');
 });
 
-// Catch-all route for React SPA
+// React SPA fallback
 app.get('*', (req, res) => {
     res.sendFile(path.join(clientBuildPath, 'index.html'));
 });

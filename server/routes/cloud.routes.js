@@ -41,12 +41,13 @@ router.get('/google/callback', async (req, res) => {
         res.redirect('https://www.ialksng.me/projects/smartsphere/cloudhub/google?cloud=success');
         
     } catch (error) {
+        console.error("OAuth Error:", error);
         const errMsg = encodeURIComponent(error.message || 'Unknown error');
         res.redirect(`https://www.ialksng.me/projects/smartsphere/cloudhub/google?cloud=error&msg=${errMsg}`);
     }
 });
 
-// 3. Fetch Files
+// 3. Fetch Files (with search support)
 router.get('/google/files', verifyToken, async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
@@ -76,12 +77,12 @@ router.get('/google/files', verifyToken, async (req, res) => {
         res.json(response.data.files);
 
     } catch (error) {
-        console.error(error);
+        console.error("Fetch Files Error:", error);
         res.status(500).json({ message: "Failed to fetch files" });
     }
 });
 
-// 4. Import File (SMART PREVIEW READY)
+// 4. Import File → DocHub
 router.post('/google/import', verifyToken, async (req, res) => {
     try {
         const { fileId, fileName, mimeType } = req.body;
@@ -97,13 +98,13 @@ router.post('/google/import', verifyToken, async (req, res) => {
         let fileBuffer;
         let finalMimeType = mimeType;
 
-        // 🔥 GET FILE METADATA (IMPORTANT FOR PREVIEW)
+        // 🔥 Get metadata for preview
         const fileMeta = await drive.files.get({
             fileId,
             fields: 'webViewLink'
         });
 
-        // Google Docs export
+        // Handle Google Docs
         if (mimeType === 'application/vnd.google-apps.document') {
             const response = await drive.files.export(
                 { fileId, mimeType: 'text/plain' },
@@ -119,15 +120,17 @@ router.post('/google/import', verifyToken, async (req, res) => {
             fileBuffer = Buffer.from(response.data);
         }
 
+        // Extract text
         const extractedText = await extractTextFromBuffer(fileBuffer, finalMimeType);
-        const cleanText = extractedText.replace(/\s+/g, ' ').trim();
+        const cleanText = extractedText?.replace(/\s+/g, ' ').trim() || '';
 
+        // Generate summary
         const summary = await analyzeText(
             `Summarize in 2 sentences:\n\n${cleanText.substring(0, 3000)}`,
             "You are a helpful document summarizer."
         );
 
-        // 🔥 FINAL DOC OBJECT
+        // 🔥 Save to DB (DocHub ready)
         const newInsight = new Insight({
             userId: req.user.id,
             filename: fileName,
@@ -144,11 +147,12 @@ router.post('/google/import', verifyToken, async (req, res) => {
                 ? 'image'
                 : 'text',
 
-            // 🔥 THIS MAKES PREVIEW WORK
             fileUrl: fileMeta.data.webViewLink
         });
 
         await newInsight.save();
+
+        console.log("✅ Saved to DocHub:", fileName);
 
         res.json({
             message: "Import successful",
@@ -156,7 +160,7 @@ router.post('/google/import', verifyToken, async (req, res) => {
         });
 
     } catch (error) {
-        console.error(error);
+        console.error("Import Error:", error);
         res.status(500).json({ message: "Import failed" });
     }
 });
