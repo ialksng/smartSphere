@@ -4,93 +4,83 @@ import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
 import GoogleDriveHub from './pages/GoogleDriveHub';
 import DocHub from './pages/DocHub';
-import CloudHub from './pages/CloudHub';        // 🔥 NEW
-import BuddyBot from './pages/BuddyBot';        // 🔥 NEW
+import CloudHub from './pages/CloudHub';
+import BuddyBot from './pages/BuddyBot';
 
 import MainLayout from './layouts/MainLayout';
 
+// 🔐 AUTH CHECK
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem('sphere_token');
-  if (!token) {
-    return <Navigate to="/auth" replace />;
-  }
-  return children;
+  return token ? children : <Navigate to="/auth" replace />;
 };
+
+// 🔥 WRAPPER (avoids repetition)
+const ProtectedLayout = ({ children }) => (
+  <ProtectedRoute>
+    <MainLayout>{children}</MainLayout>
+  </ProtectedRoute>
+);
 
 function App() {
   return (
     <BrowserRouter basename="/projects/smartsphere">
       <Routes>
 
-        {/* Default */}
+        {/* DEFAULT */}
         <Route path="/" element={<Navigate to="/auth" replace />} />
 
-        {/* Public */}
+        {/* PUBLIC */}
         <Route path="/auth" element={<Auth />} />
 
-        {/* 🔥 PROTECTED ROUTES WITH LAYOUT */}
+        {/* 🔥 PROTECTED ROUTES */}
 
-        {/* Dashboard */}
         <Route 
           path="/dashboard" 
           element={
-            <ProtectedRoute>
-              <MainLayout>
-                <Dashboard />
-              </MainLayout>
-            </ProtectedRoute>
+            <ProtectedLayout>
+              <Dashboard />
+            </ProtectedLayout>
           } 
         />
 
-        {/* 🔥 CLOUD HUB MAIN PAGE */}
         <Route 
           path="/cloudhub" 
           element={
-            <ProtectedRoute>
-              <MainLayout>
-                <CloudHub />
-              </MainLayout>
-            </ProtectedRoute>
+            <ProtectedLayout>
+              <CloudHub />
+            </ProtectedLayout>
           } 
         />
 
-        {/* Google Drive */}
         <Route 
           path="/cloudhub/google" 
           element={
-            <ProtectedRoute>
-              <MainLayout>
-                <GoogleDriveHub />
-              </MainLayout>
-            </ProtectedRoute>
+            <ProtectedLayout>
+              <GoogleDriveHub />
+            </ProtectedLayout>
           } 
         />
 
-        {/* DocHub */}
         <Route 
           path="/dochub" 
           element={
-            <ProtectedRoute>
-              <MainLayout>
-                <DocHub />
-              </MainLayout>
-            </ProtectedRoute>
+            <ProtectedLayout>
+              <DocHub />
+            </ProtectedLayout>
           } 
         />
 
-        {/* 🔥 BUDDYBOT */}
         <Route 
           path="/buddybot" 
           element={
-            <ProtectedRoute>
-              <MainLayout>
-                <BuddyBot />
-              </MainLayout>
-            </ProtectedRoute>
+            <ProtectedLayout>
+              <BuddyBot />
+            </ProtectedLayout>
           } 
         />
 
-        {/* Fallback */}
+        {/* FALLBACK */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
 
       </Routes>
