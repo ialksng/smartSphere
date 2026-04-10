@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Folder, FileText } from "lucide-react";
+import { Folder, FileText, Upload, ArrowLeft } from "lucide-react";
 
 const DocHub = () => {
   const [items, setItems] = useState([]);
   const [currentFolder, setCurrentFolder] = useState(null);
+  const [folderStack, setFolderStack] = useState([]);
   const [content, setContent] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
 
@@ -19,7 +20,7 @@ const DocHub = () => {
     });
 
     const data = await res.json();
-    setItems(data);
+    setItems(data || []);
   };
 
   const createFolder = async () => {
@@ -55,7 +56,16 @@ const DocHub = () => {
   };
 
   const openFolder = (id) => {
+    setFolderStack(prev => [...prev, currentFolder]);
     setCurrentFolder(id);
+    setSelectedFile(null);
+  };
+
+  const goBack = () => {
+    const prev = folderStack[folderStack.length - 1] || null;
+    setFolderStack(stack => stack.slice(0, -1));
+    setCurrentFolder(prev);
+    setSelectedFile(null);
   };
 
   const openFile = async (id) => {
@@ -71,6 +81,8 @@ const DocHub = () => {
   };
 
   const saveFile = async () => {
+    if (!selectedFile) return;
+
     await fetch(`/projects/smartsphere/api/dochub/${selectedFile._id}`, {
       method: "PUT",
       headers: {
@@ -81,41 +93,100 @@ const DocHub = () => {
     });
   };
 
+  const uploadToDrive = async () => {
+    if (!selectedFile) return;
+
+    try {
+      await fetch('/projects/smartsphere/api/cloud/google/upload-dochub', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
+        },
+        body: JSON.stringify({ fileId: selectedFile._id })
+      });
+
+      alert("Uploaded to Google Drive");
+    } catch (err) {
+      console.error(err);
+      alert("Upload failed");
+    }
+  };
+
   return (
     <div className="flex h-full">
 
-      <div className="w-80 border-r p-4">
+      <div className="w-80 border-r p-4 bg-white/5">
+
         <div className="flex gap-2 mb-4">
-          <button onClick={createFolder}>+ Folder</button>
-          <button onClick={createFile}>+ File</button>
+          <button onClick={createFolder} className="px-2 py-1 bg-white/10 rounded">+ Folder</button>
+          <button onClick={createFile} className="px-2 py-1 bg-white/10 rounded">+ File</button>
         </div>
 
-        {items.map(item => (
-          <div
-            key={item._id}
-            onClick={() => item.type === 'folder' ? openFolder(item._id) : openFile(item._id)}
-            className="p-2 cursor-pointer hover:bg-gray-200"
+        {currentFolder && (
+          <button
+            onClick={goBack}
+            className="flex items-center gap-2 text-sm mb-3 text-gray-400"
           >
-            {item.type === 'folder' ? <Folder /> : <FileText />}
-            {item.filename}
-          </div>
-        ))}
+            <ArrowLeft size={16} />
+            Back
+          </button>
+        )}
+
+        <div className="space-y-2">
+          {items.map(item => (
+            <div
+              key={item._id}
+              onClick={() => item.type === 'folder' ? openFolder(item._id) : openFile(item._id)}
+              className="flex items-center gap-2 p-2 cursor-pointer hover:bg-white/10 rounded"
+            >
+              {item.type === 'folder'
+                ? <Folder size={18} className="text-yellow-400" />
+                : <FileText size={18} className="text-blue-400" />}
+              <span className="text-sm">{item.filename}</span>
+            </div>
+          ))}
+        </div>
+
       </div>
 
-      <div className="flex-1 p-4">
+      <div className="flex-1 p-4 flex flex-col">
+
         {selectedFile ? (
           <>
-            <h2>{selectedFile.filename}</h2>
+            <div className="flex justify-between items-center mb-3">
+              <h2 className="text-lg font-semibold">{selectedFile.filename}</h2>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={saveFile}
+                  className="px-3 py-1 bg-blue-600 rounded text-sm"
+                >
+                  Save
+                </button>
+
+                <button
+                  onClick={uploadToDrive}
+                  className="px-3 py-1 bg-green-600 rounded text-sm flex items-center gap-1"
+                >
+                  <Upload size={16} />
+                  Drive
+                </button>
+              </div>
+            </div>
+
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              className="w-full h-full"
+              className="w-full flex-1 bg-transparent border border-white/10 rounded p-3 outline-none resize-none"
             />
-            <button onClick={saveFile}>Save</button>
           </>
         ) : (
-          <p>Select file</p>
+          <div className="flex items-center justify-center h-full text-gray-500">
+            Select a file
+          </div>
         )}
+
       </div>
 
     </div>
