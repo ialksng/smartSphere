@@ -15,9 +15,7 @@ const insightSchema = new mongoose.Schema({
   content: {
     type: String,
     default: "",
-    required: function () {
-      return this.type === 'file';
-    }
+    required: false
   },
 
   summary: {
