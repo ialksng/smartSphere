@@ -51,7 +51,6 @@ const DocHub = () => {
       });
       
       const newFile = await res.json();
-      // Navigate to the new editor route
       navigate('/editor', { state: { docId: newFile._id } });
     } catch (err) {
       console.error("Failed to create file", err);
@@ -60,11 +59,7 @@ const DocHub = () => {
   };
 
   const openFile = (file) => {
-    if ((file.source === "google_drive" || file.source === "onedrive") && file.fileUrl) {
-      window.open(file.fileUrl, "_blank");
-      return;
-    }
-    // Navigate to the standalone editor
+    // REMOVED REDIRECT: Everything now opens inside the DocEditor.
     navigate('/editor', { state: { docId: file._id } });
   };
 
@@ -117,7 +112,7 @@ const DocHub = () => {
                   </div>
 
                   <div className="flex gap-4 text-sm">
-                    <button onClick={() => openFile(file)} className="text-blue-400 hover:text-blue-300">Open</button>
+                    <button onClick={() => openFile(file)} className="text-blue-400 hover:text-blue-300">Open in Editor</button>
                     <button onClick={() => downloadFile(file)} className="text-gray-400 hover:text-white">Download</button>
                   </div>
                 </div>

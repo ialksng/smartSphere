@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Save, ArrowLeft, Loader2 } from "lucide-react";
+import { Save, ArrowLeft, Loader2, CloudUpload } from "lucide-react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 
@@ -9,14 +9,19 @@ const DocEditor = () => {
   const navigate = useNavigate();
   const [selectedFile, setSelectedFile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   const editor = useEditor({
     extensions: [StarterKit],
-    content: ""
+    content: "",
+    editorProps: {
+      attributes: {
+        class: 'focus:outline-none min-h-[70vh] text-black leading-relaxed',
+      },
+    },
   });
 
   useEffect(() => {
-    // Get the docId passed from either Dashboard or DocHub navigation
     const docId = location.state?.docId;
     
     if (!docId) {
@@ -34,12 +39,7 @@ const DocEditor = () => {
         const data = await res.json();
         
         if (data && data._id) {
-           if ((data.source === "google_drive" || data.source === "onedrive") && data.fileUrl) {
-              window.open(data.fileUrl, "_blank");
-              navigate(-1); // Go back if external
-           } else {
-             setSelectedFile(data);
-           }
+           setSelectedFile(data);
         } else {
            navigate('/dochub');
         }
@@ -56,13 +56,18 @@ const DocEditor = () => {
 
   useEffect(() => {
     if (editor && selectedFile && selectedFile.content !== undefined) {
-      editor.commands.setContent(selectedFile.content);
+      // Intelligently parse plain text into HTML paragraphs so TipTap formats it properly
+      const contentToSet = selectedFile.content.includes('<') 
+        ? selectedFile.content 
+        : `<p>${selectedFile.content.replace(/\n/g, '<br>')}</p>`;
+        
+      editor.commands.setContent(contentToSet);
     }
   }, [selectedFile, editor]);
 
   const saveFile = async () => {
     if (!selectedFile || !editor) return;
-
+    setSaving(true);
     try {
       await fetch(`/projects/smartsphere/api/dochub/${selectedFile._id}`, {
         method: "PUT",
@@ -71,14 +76,42 @@ const DocEditor = () => {
           Authorization: `Bearer ${localStorage.getItem("sphere_token")}`
         },
         body: JSON.stringify({
-          content: editor.getHTML()
+          content: editor.getHTML() // Save HTML markup from the editor
         })
       });
-      alert("Saved successfully!");
+      alert("Saved locally successfully!");
     } catch (err) {
       alert("Failed to save.");
+    } finally {
+      setSaving(false);
     }
   };
+
+  const syncToCloud = async () => {
+    if (!selectedFile) return;
+    try {
+      const endpoint = selectedFile.source === 'google_drive' 
+        ? '/projects/smartsphere/api/cloud/google/upload-dochub'
+        : '';
+        
+      if (!endpoint) {
+          alert("Cloud sync for this provider is not setup yet.");
+          return;
+      }
+
+      await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("sphere_token")}`
+        },
+        body: JSON.stringify({ fileId: selectedFile._id })
+      });
+      alert("Synced edits back to Google Drive successfully!");
+    } catch (err) {
+      alert("Failed to sync to cloud.");
+    }
+  }
 
   if (loading) {
     return (
@@ -89,6 +122,9 @@ const DocEditor = () => {
   }
 
   if (!selectedFile) return null;
+
+  // Treat 'text' or 'undefined' as editable formats.
+  const isEditable = selectedFile.contentType === 'text' || !selectedFile.contentType;
 
   return (
     <div className="p-6 bg-[#0b0f19] text-white min-h-screen flex flex-col">
@@ -102,24 +138,45 @@ const DocEditor = () => {
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-semibold">{selectedFile.filename}</h2>
 
-        <button 
-          onClick={saveFile} 
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition-colors"
-        >
-          <Save size={18} /> Save
-        </button>
+        <div className="flex gap-3">
+          {/* Cloud Sync Button */}
+          {(selectedFile.source === 'google_drive' || selectedFile.source === 'onedrive') && (
+             <button 
+               onClick={syncToCloud} 
+               className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg transition-colors text-sm"
+             >
+               <CloudUpload size={16} /> Sync to Cloud
+             </button>
+          )}
+          
+          {/* Native Save Button */}
+          {isEditable && (
+            <button 
+              onClick={saveFile} 
+              disabled={saving}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 px-4 py-2 rounded-lg transition-colors text-sm"
+            >
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} 
+              {saving ? "Saving..." : "Save Edits"}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 bg-white/5 border border-white/10 rounded-xl overflow-hidden p-4">
         {selectedFile.contentType === "pdf" && selectedFile.fileUrl ? (
-          <iframe src={selectedFile.fileUrl} className="w-full h-full min-h-[75vh] rounded" />
+          // Modifies the Google Drive URL to enforce embeddable preview layout
+          <iframe 
+            src={selectedFile.fileUrl.replace(/\/view.*$/, '/preview')} 
+            className="w-full h-full min-h-[75vh] rounded bg-white" 
+            title="PDF Preview"
+          />
         ) : selectedFile.contentType === "image" && selectedFile.fileUrl ? (
           <img src={selectedFile.fileUrl} className="max-h-[75vh] mx-auto rounded" alt={selectedFile.filename} />
         ) : (
-          <EditorContent
-            editor={editor}
-            className="bg-white text-black p-6 rounded-lg min-h-[75vh] prose max-w-none focus:outline-none"
-          />
+          <div className="bg-white rounded-lg p-8 h-full min-h-[75vh]">
+            <EditorContent editor={editor} />
+          </div>
         )}
       </div>
     </div>
