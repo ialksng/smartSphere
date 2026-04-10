@@ -3,7 +3,7 @@ const { google } = require('googleapis');
 const fs = require('fs');
 const User = require('../models/User');
 const Insight = require('../models/Insight');
-const Folder = require('../models/Folder'); // Added Folder model
+const Folder = require('../models/Folder');
 const { verifyToken } = require('../middleware/auth.middleware');
 const { extractTextFromBuffer } = require('../services/document.service');
 const { analyzeText } = require('../services/ai.service');
@@ -55,7 +55,8 @@ router.get('/google/callback', async (req, res) => {
 
     try {
         const { tokens } = await oauth2Client.getToken(code);
-        await User.findByIdAndUpdate(userId, { googleTokens: tokens });
+        // FIXED: Added { returnDocument: 'after' } to clear Mongoose warning
+        await User.findByIdAndUpdate(userId, { googleTokens: tokens }, { returnDocument: 'after' });
 
         res.redirect('https://www.ialksng.me/projects/smartsphere/cloudhub/google?cloud=success');
     } catch (error) {
@@ -92,7 +93,12 @@ router.get('/google/files', verifyToken, async (req, res) => {
         });
 
         res.json(response.data.files);
-    } catch {
+    } catch (error) {
+        // FIXED: Catch invalid_grant and remove dead tokens
+        if (error.message === 'invalid_grant') {
+            await User.findByIdAndUpdate(req.user.id, { $unset: { googleTokens: 1 } }, { returnDocument: 'after' });
+            return res.status(401).json({ message: 'Google Drive connection expired or revoked. Please reconnect.' });
+        }
         res.status(500).json({ message: 'Failed to fetch files' });
     }
 });
@@ -169,13 +175,16 @@ router.post('/google/import', verifyToken, async (req, res) => {
         await newInsight.save();
 
         res.json({ message: 'Import successful', insight: newInsight });
-    } catch {
+    } catch (error) {
+        // FIXED: Catch invalid_grant
+        if (error.message === 'invalid_grant') {
+            await User.findByIdAndUpdate(req.user.id, { $unset: { googleTokens: 1 } }, { returnDocument: 'after' });
+            return res.status(401).json({ message: 'Google Drive connection expired or revoked. Please reconnect.' });
+        }
         res.status(500).json({ message: 'Import failed' });
     }
 });
 
-// CHANGED: Replaced /google/upload-dochub with /google/upload-local
-// Now smartly handles exporting both single files and entire local folders
 router.post('/google/upload-local', verifyToken, async (req, res) => {
     try {
         const { itemId, type } = req.body;
@@ -188,18 +197,16 @@ router.post('/google/upload-local', verifyToken, async (req, res) => {
         oauth2Client.setCredentials(user.googleTokens);
         const drive = google.drive({ version: 'v3', auth: oauth2Client });
 
-        // Helper function to sanitize MimeTypes
         const sanitizeMimeType = (mt) => {
             if (!mt || mt.startsWith('.') || !mt.includes('/')) {
                 if (mt === '.pdf') return 'application/pdf';
                 if (mt === '.md') return 'text/markdown';
                 if (mt === '.docx') return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-                return 'text/plain'; // Fallback for .txt or undefined
+                return 'text/plain'; 
             }
             return mt;
         };
 
-        // EXPORT A SINGLE FILE
         if (type === 'file') {
             const file = await Insight.findById(itemId);
             
@@ -207,7 +214,6 @@ router.post('/google/upload-local', verifyToken, async (req, res) => {
                 return res.status(404).json({ message: 'File not found' });
             }
 
-            // Fixed MIME type assignment
             const mimeType = sanitizeMimeType(file.fileType || file.mimeType);
 
             const response = await drive.files.create({
@@ -221,16 +227,16 @@ router.post('/google/upload-local', verifyToken, async (req, res) => {
                 }
             });
 
+            // FIXED: Added { returnDocument: 'after' } to clear Mongoose warning
             await Insight.findByIdAndUpdate(itemId, {
                 driveFileId: response.data.id,
                 fileUrl: `https://drive.google.com/file/d/${response.data.id}/view`,
                 source: 'google_drive'
-            });
+            }, { returnDocument: 'after' });
 
             return res.json({ message: 'File successfully uploaded to Google Drive', file: response.data });
         } 
         
-        // EXPORT AN ENTIRE FOLDER
         if (type === 'folder') {
             const folder = await Folder.findById(itemId);
             
@@ -238,7 +244,6 @@ router.post('/google/upload-local', verifyToken, async (req, res) => {
                 return res.status(404).json({ message: 'Folder not found' });
             }
 
-            // 1. Create the Folder directly inside Google Drive
             const driveFolder = await drive.files.create({
                 requestBody: {
                     name: folder.name,
@@ -248,20 +253,16 @@ router.post('/google/upload-local', verifyToken, async (req, res) => {
             });
 
             const driveFolderId = driveFolder.data.id;
-
-            // 2. Fetch all local files stored inside this folder
             const files = await Insight.find({ userId: req.user.id, folderId: folder._id });
 
-            // 3. Loop through and upload all files directly into the newly created Drive Folder
             for (const f of files) {
-                // Fixed MIME type assignment
                 const mimeType = sanitizeMimeType(f.fileType || f.mimeType);
                 
                 await drive.files.create({
                     requestBody: {
                         name: f.filename || f.name,
                         mimeType,
-                        parents: [driveFolderId] // Connects the file to the Google Drive Folder
+                        parents: [driveFolderId] 
                     },
                     media: {
                         mimeType,
@@ -276,6 +277,11 @@ router.post('/google/upload-local', verifyToken, async (req, res) => {
         res.status(400).json({ message: 'Invalid export type specified.' });
 
     } catch (error) {
+        // FIXED: Catch invalid_grant
+        if (error.message === 'invalid_grant') {
+            await User.findByIdAndUpdate(req.user.id, { $unset: { googleTokens: 1 } }, { returnDocument: 'after' });
+            return res.status(401).json({ message: 'Google Drive connection expired or revoked. Please reconnect.' });
+        }
         console.error("Cloud Upload Error:", error);
         res.status(500).json({ message: 'Upload failed' });
     }
@@ -300,7 +306,12 @@ router.get('/google/storage', verifyToken, async (req, res) => {
         const total = Number(response.data.storageQuota.limit || 0);
 
         res.json({ used, total });
-    } catch {
+    } catch (error) {
+        // FIXED: Catch invalid_grant
+        if (error.message === 'invalid_grant') {
+            await User.findByIdAndUpdate(req.user.id, { $unset: { googleTokens: 1 } }, { returnDocument: 'after' });
+            return res.status(401).json({ message: 'Google Drive connection expired or revoked. Please reconnect.' });
+        }
         res.status(500).json({ message: 'Failed to fetch storage info' });
     }
 });
