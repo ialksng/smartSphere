@@ -18,7 +18,8 @@ export default function ChatInterface({ onInsightAdded }) {
         setIsLoading(true);
 
         try {
-            const res = await fetch('/api/ai/chat', {
+            // FIX: Added the base path
+            const res = await fetch('/projects/smartsphere/api/ai/chat', {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
@@ -55,7 +56,8 @@ export default function ChatInterface({ onInsightAdded }) {
         formData.append('file', file);
 
         try {
-            const res = await fetch('/api/ai/upload', {
+            // FIX: Added the base path
+            const res = await fetch('/projects/smartsphere/api/ai/upload', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('sphere_token')}`

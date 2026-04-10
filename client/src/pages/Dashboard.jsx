@@ -11,7 +11,8 @@ export default function Dashboard() {
 
     const fetchInsights = async () => {
         try {
-            const res = await fetch('/api/ai/insights', {
+            // FIX: Added the base path
+            const res = await fetch('/projects/smartsphere/api/ai/insights', {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('sphere_token')}`
                 }
