@@ -99,7 +99,6 @@ router.get('/google/files', verifyToken, async (req, res) => {
 
 router.post('/google/import', verifyToken, async (req, res) => {
     try {
-        // ADDED folderId so imported files go to the correct local folder
         const { fileId, fileName, mimeType, folderId } = req.body;
 
         const user = await User.findById(req.user.id);
@@ -151,7 +150,7 @@ router.post('/google/import', verifyToken, async (req, res) => {
 
         const newInsight = new Insight({
             userId: req.user.id,
-            folderId: folderId || null, // SAVES TO THE CURRENT FOLDER
+            folderId: folderId || null, 
             filename: fileName,
             fileType: finalMimeType,
             content: cleanText,
@@ -189,6 +188,17 @@ router.post('/google/upload-local', verifyToken, async (req, res) => {
         oauth2Client.setCredentials(user.googleTokens);
         const drive = google.drive({ version: 'v3', auth: oauth2Client });
 
+        // Helper function to sanitize MimeTypes
+        const sanitizeMimeType = (mt) => {
+            if (!mt || mt.startsWith('.') || !mt.includes('/')) {
+                if (mt === '.pdf') return 'application/pdf';
+                if (mt === '.md') return 'text/markdown';
+                if (mt === '.docx') return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+                return 'text/plain'; // Fallback for .txt or undefined
+            }
+            return mt;
+        };
+
         // EXPORT A SINGLE FILE
         if (type === 'file') {
             const file = await Insight.findById(itemId);
@@ -197,7 +207,8 @@ router.post('/google/upload-local', verifyToken, async (req, res) => {
                 return res.status(404).json({ message: 'File not found' });
             }
 
-            const mimeType = file.fileType || file.mimeType || 'text/plain';
+            // Fixed MIME type assignment
+            const mimeType = sanitizeMimeType(file.fileType || file.mimeType);
 
             const response = await drive.files.create({
                 requestBody: {
@@ -243,7 +254,8 @@ router.post('/google/upload-local', verifyToken, async (req, res) => {
 
             // 3. Loop through and upload all files directly into the newly created Drive Folder
             for (const f of files) {
-                const mimeType = f.fileType || f.mimeType || 'text/plain';
+                // Fixed MIME type assignment
+                const mimeType = sanitizeMimeType(f.fileType || f.mimeType);
                 
                 await drive.files.create({
                     requestBody: {

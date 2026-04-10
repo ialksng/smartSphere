@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Save, ArrowLeft, Loader2, CloudUpload, Bot, X, Send } from "lucide-react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -7,6 +7,9 @@ import StarterKit from "@tiptap/starter-kit";
 const DocEditor = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  // Extract the document ID directly from the URL (e.g., /doceditor/12345)
+  const { id } = useParams(); 
+  
   const [selectedFile, setSelectedFile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -32,7 +35,8 @@ const DocEditor = () => {
   }, [chatHistory, chatLoading]);
 
   useEffect(() => {
-    const docId = location.state?.docId;
+    // Look for the ID in the URL first, fallback to hidden location state if missing
+    const docId = id || location.state?.docId;
     
     if (!docId) {
       navigate('/dochub');
@@ -57,6 +61,8 @@ const DocEditor = () => {
              }
            ]);
         } else {
+           // If the file isn't in your local MongoDB (like a pure external Google Drive file)
+           alert("Could not load file content. Direct editing of purely external cloud files is not fully supported yet.");
            navigate('/dochub');
         }
       } catch (err) {
@@ -68,7 +74,7 @@ const DocEditor = () => {
     };
 
     fetchFile();
-  }, [location.state, navigate]);
+  }, [id, location.state, navigate]);
 
   useEffect(() => {
     if (editor && selectedFile && selectedFile.content !== undefined) {
