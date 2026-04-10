@@ -2,26 +2,26 @@ import { useState, useEffect } from 'react';
 import ChatInterface from '../components/ChatInterface';
 import { 
     LayoutDashboard, Cloud, BrainCircuit, FileText, 
-    Settings, LogOut, ChevronRight, HardDrive, Loader2 
+    Settings, LogOut, ChevronRight, HardDrive, Loader2, X 
 } from 'lucide-react';
 
 export default function Dashboard() {
     const [insights, setInsights] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+    
+    // --- NEW: Google Drive State ---
+    const [driveFiles, setDriveFiles] = useState([]);
+    const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
+    const [isDriveLoading, setIsDriveLoading] = useState(false);
 
     const fetchInsights = async () => {
         try {
-            // Updated path to include /projects/smartsphere prefix
             const res = await fetch('/projects/smartsphere/api/ai/insights', {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('sphere_token')}`
-                }
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('sphere_token')}` }
             });
             if (res.ok) {
                 const data = await res.json();
                 setInsights(data);
-            } else {
-                console.error("Failed to fetch insights, status:", res.status);
             }
         } catch (error) {
             console.error("Failed to fetch insights", error);
@@ -30,25 +30,35 @@ export default function Dashboard() {
         }
     };
 
-    // --- NEW: Google Drive OAuth Handler ---
-    const handleGoogleConnect = async () => {
+    // --- NEW: Smart Google Drive Handler ---
+    const handleGoogleDriveClick = async () => {
+        setIsDriveLoading(true);
         try {
-            // 1. Decode the JWT to get the user's ID
-            const token = localStorage.getItem('sphere_token');
-            if (!token) return;
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            const userId = payload.id;
+            // 1. Try to fetch files (Assuming we are already connected)
+            const res = await fetch('/projects/smartsphere/api/cloud/google/files', {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('sphere_token')}` }
+            });
 
-            // 2. Ask the backend for the secure Google Login URL
-            const res = await fetch(`/projects/smartsphere/api/cloud/google/auth?userId=${userId}`);
-            const data = await res.json();
-            
-            // 3. Redirect the browser to Google's consent screen
-            if (data.url) {
-                window.location.href = data.url;
+            if (res.ok) {
+                // Successfully connected! Show the files in the modal.
+                const files = await res.json();
+                setDriveFiles(files);
+                setIsDriveModalOpen(true);
+            } else if (res.status === 401) {
+                // Not connected yet. Initiate the OAuth login flow.
+                const token = localStorage.getItem('sphere_token');
+                if (!token) return;
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                const userId = payload.id;
+
+                const authRes = await fetch(`/projects/smartsphere/api/cloud/google/auth?userId=${userId}`);
+                const authData = await authRes.json();
+                if (authData.url) window.location.href = authData.url;
             }
         } catch (error) {
-            console.error("Failed to initiate Google auth", error);
+            console.error("Failed to communicate with Google Drive", error);
+        } finally {
+            setIsDriveLoading(false);
         }
     };
 
@@ -78,12 +88,11 @@ export default function Dashboard() {
                     <div className="pt-6 pb-2">
                         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-3">Cloud Hub</p>
                     </div>
-                    {/* Wired up the Google Connect button! */}
+                    {/* Wired to the smart click handler */}
                     <NavItem 
-                        icon={<Cloud size={18} className="text-blue-400" />} 
+                        icon={isDriveLoading ? <Loader2 size={18} className="animate-spin text-blue-400" /> : <Cloud size={18} className="text-blue-400" />} 
                         label="Google Drive" 
-                        badge="Connect" 
-                        onClick={handleGoogleConnect} 
+                        onClick={handleGoogleDriveClick} 
                     />
                     <NavItem icon={<Cloud size={18} className="text-blue-600" />} label="OneDrive" />
                     <NavItem icon={<HardDrive size={18} />} label="Local Storage" />
@@ -102,14 +111,14 @@ export default function Dashboard() {
             </aside>
 
             {/* COLUMN 2: Main Dashboard & Insights Layer */}
-            <main className="flex-1 flex flex-col h-full overflow-y-auto z-10">
+            <main className="flex-1 flex flex-col h-full overflow-y-auto z-10 relative">
                 <header className="p-8 pb-4">
                     <h2 className="text-3xl font-semibold">Intelligence Overview</h2>
                     <p className="text-gray-400 text-sm mt-1">Your unified knowledge base and document insights.</p>
                 </header>
 
                 <div className="p-8 pt-4 space-y-6 flex-1">
-                    {/* Dynamic Top Level Metrics */}
+                    {/* Top Level Metrics */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <StatCard title="Processed Documents" value={insights.length} icon={<FileText size={24} className="text-blue-400" />} />
                         <StatCard title="AI Insights Generated" value={insights.length * 3} icon={<BrainCircuit size={24} className="text-emerald-400" />} />
@@ -154,6 +163,46 @@ export default function Dashboard() {
                         </div>
                     </div>
                 </div>
+
+                {/* --- NEW: GOOGLE DRIVE MODAL --- */}
+                {isDriveModalOpen && (
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-8 z-50">
+                        <div className="bg-[#0f172a] border border-glassBorder w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-full">
+                            <div className="p-6 border-b border-glassBorder flex justify-between items-center bg-white/5">
+                                <div className="flex items-center gap-3">
+                                    <Cloud className="text-blue-400" size={24} />
+                                    <h2 className="text-xl font-semibold">Google Drive Hub</h2>
+                                </div>
+                                <button onClick={() => setIsDriveModalOpen(false)} className="text-gray-400 hover:text-white transition">
+                                    <X size={24} />
+                                </button>
+                            </div>
+                            
+                            <div className="flex-1 overflow-y-auto p-6 space-y-3">
+                                {driveFiles.length === 0 ? (
+                                    <p className="text-center text-gray-400 text-sm py-8">No files found in your Google Drive.</p>
+                                ) : (
+                                    driveFiles.map((file) => (
+                                        <div key={file.id} className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-glassBorder hover:bg-white/10 transition group">
+                                            <div className="flex items-center gap-4">
+                                                <FileText size={20} className="text-blue-400/70" />
+                                                <div>
+                                                    <h4 className="font-medium text-sm text-white truncate max-w-xs">{file.name}</h4>
+                                                    <p className="text-xs text-gray-500 mt-0.5">
+                                                        Modified {new Date(file.modifiedTime).toLocaleDateString()}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <button className="px-4 py-1.5 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white rounded-lg text-xs font-medium border border-blue-500/30 transition">
+                                                Import to AI
+                                            </button>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
             </main>
 
             {/* COLUMN 3: AI Assistant (BuddyBot) */}
@@ -165,12 +214,11 @@ export default function Dashboard() {
 }
 
 // --- Internal Helper Components ---
-// Added the `onClick` prop so the button can actually trigger our function
 function NavItem({ icon, label, active, badge, onClick }) {
     return (
         <button 
             onClick={onClick} 
-            className={`flex items-center justify-between w-full px-3 py-2.5 rounded-xl transition ${active ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-gray-400 hover:bg-white/5 hover:text-white border border-transparent'}`}
+            className={`flex items-center justify-between w-full px-3 py-2.5 rounded-xl transition ${active ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-gray-400 hover:bg-white/5 hover:text-white border border-transparent cursor-pointer'}`}
         >
             <div className="flex items-center gap-3">
                 {icon}

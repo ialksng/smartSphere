@@ -1,71 +1,82 @@
 const express = require('express');
 const { google } = require('googleapis');
-// We will need the User model to save the tokens later
-// const User = require('../models/User'); 
+const User = require('../models/User'); // <-- Added the User model
+const { verifyToken } = require('../middleware/auth.middleware'); // <-- For protecting our new files route
 
 const router = express.Router();
 
-// Initialize the Google OAuth2 Client
 const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
     process.env.GOOGLE_REDIRECT_URI
 );
 
-// 1. Generate the Google Login URL
-// The frontend will call this route to get the URL to redirect the user to.
+// 1. Generate Login URL
 router.get('/google/auth', (req, res) => {
-    // We pass the user ID in the query string from the frontend so we remember 
-    // exactly who is trying to connect their drive.
     const userId = req.query.userId; 
-
-    if (!userId) {
-        return res.status(400).json({ message: "User ID is required to connect Cloud services." });
-    }
+    if (!userId) return res.status(400).json({ message: "User ID required" });
 
     const authUrl = oauth2Client.generateAuthUrl({
-        access_type: 'offline', // Requests a refresh token so the user stays logged in
-        prompt: 'consent',      // Forces the consent screen to guarantee we get a refresh token
-        scope: ['https://www.googleapis.com/auth/drive.readonly'], // Read-only access to their Drive
-        state: userId           // We pass the userId into the 'state' parameter. Google will hand this exact string back to us in the callback.
+        access_type: 'offline', 
+        prompt: 'consent',      
+        scope: ['https://www.googleapis.com/auth/drive.readonly'], 
+        state: userId           
     });
     
     res.json({ url: authUrl });
 });
 
-// 2. Handle the Google Callback
-// Google redirects the user here AFTER they click "Allow" on the consent screen.
+// 2. Handle Callback & Save Tokens
 router.get('/google/callback', async (req, res) => {
-    // Google hands us back an authorization 'code' and our original 'state' (which contains the userId)
     const { code, state: userId } = req.query; 
     
     try {
-        if (!code) throw new Error("No authorization code provided by Google.");
+        if (!code) throw new Error("No authorization code provided.");
 
-        // Exchange the temporary code for permanent access/refresh tokens
         const { tokens } = await oauth2Client.getToken(code);
         
-        // ---------------------------------------------------------
-        // TODO for next session: Save these tokens to the database!
-        // We will add a 'googleTokens' field to your User.js schema
-        // await User.findByIdAndUpdate(userId, { googleTokens: tokens });
-        // ---------------------------------------------------------
+        // --- NEW: Actually save the tokens to MongoDB! ---
+        await User.findByIdAndUpdate(userId, { googleTokens: tokens });
 
-        console.log(`Successfully acquired Google Drive tokens for User ID: ${userId}`);
-
-        // Securely redirect the user back to the SmartSphere frontend
-        // We append a success query parameter so the frontend knows it worked
+        console.log(`Successfully connected Google Drive for User: ${userId}`);
         res.redirect('https://www.ialksng.me/projects/smartsphere/dashboard?cloud=success');
         
     } catch (error) {
         console.error('Google OAuth Error:', error);
-        // Redirect back with an error flag if something failed
         res.redirect('https://www.ialksng.me/projects/smartsphere/dashboard?cloud=error');
     }
 });
 
-// Future OneDrive endpoints (Stubs)
-router.get('/onedrive/auth', (req, res) => res.json({ message: "OneDrive Auth Route" }));
-router.get('/onedrive/callback', (req, res) => res.json({ message: "OneDrive Callback" }));
+// 3. --- NEW: Fetch Google Drive Files ---
+router.get('/google/files', verifyToken, async (req, res) => {
+    try {
+        // 1. Find the user in the database
+        const user = await User.findById(req.user.id);
+        
+        // 2. Check if they have connected their drive
+        if (!user || !user.googleTokens) {
+            return res.status(401).json({ message: "Google Drive not connected." });
+        }
+
+        // 3. Set the credentials for this specific user
+        oauth2Client.setCredentials(user.googleTokens);
+        
+        // 4. Initialize the Google Drive API
+        const drive = google.drive({ version: 'v3', auth: oauth2Client });
+        
+        // 5. Fetch their 10 most recent files (ignoring folders)
+        const response = await drive.files.list({
+            pageSize: 10,
+            fields: 'files(id, name, mimeType, modifiedTime)',
+            q: "mimeType != 'application/vnd.google-apps.folder' and trashed = false",
+            orderBy: 'modifiedTime desc'
+        });
+
+        res.json(response.data.files);
+    } catch (error) {
+        console.error("Fetch Drive Files Error:", error);
+        res.status(500).json({ message: "Failed to fetch files from Google Drive." });
+    }
+});
 
 module.exports = router;
