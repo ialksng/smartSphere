@@ -1,18 +1,15 @@
-const { GoogleGenAI } = require('@google/genai');
-const axios = require('axios');
+import { GoogleGenAI } from '@google/genai';
+import axios from 'axios';
 
-// Initialize Gemini
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// Groq Fallback Function
 const callGroqFallback = async (prompt) => {
     console.log("⚠️ Falling back to Groq API...");
     try {
         const response = await axios.post(
             'https://api.groq.com/openai/v1/chat/completions',
             {
-                // FIX: Updated to a currently supported model
-                model: "llama-3.3-70b-versatile", 
+                model: "llama-3.3-70b-versatile",
                 messages: [{ role: "user", content: prompt }]
             },
             {
@@ -30,12 +27,11 @@ const callGroqFallback = async (prompt) => {
     }
 };
 
-// Main Analysis Function
-const analyzeText = async (text, task = "summarize") => {
+export const analyzeText = async (text, task = "summarize") => {
     const prompt = `Task: ${task}. \n\nAnalyze the following text and provide key insights, topics, and a brief summary.\n\nText: ${text}`;
 
     try {
-        console.log("🤖 Attempting to use Gemini...");
+        console.log("🤖 Attempting to use Gemini for analysis...");
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
@@ -43,9 +39,20 @@ const analyzeText = async (text, task = "summarize") => {
         return response.text;
     } catch (error) {
         console.error("❌ Gemini API failed:", error.message);
-        // Trigger Fallback
         return await callGroqFallback(prompt);
     }
 };
 
-module.exports = { analyzeText };
+export const chatWithAI = async (prompt) => {
+    try {
+        console.log("🤖 Attempting to use Gemini for chat...");
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+        });
+        return response.text;
+    } catch (error) {
+        console.error("❌ Gemini API chat failed:", error.message);
+        return await callGroqFallback(prompt);
+    }
+};

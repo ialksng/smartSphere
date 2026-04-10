@@ -1,25 +1,22 @@
-const express = require('express');
-const multer = require('multer');
-const { analyzeText } = require('../services/ai.service');
-const { extractTextFromBuffer } = require('../services/document.service');
-const Insight = require('../models/Insight');
-const { verifyToken } = require('../middleware/auth.middleware');
+import express from 'express';
+import multer from 'multer';
+import { analyzeText, chatWithAI } from '../services/ai.service.js';
+import { extractTextFromBuffer } from '../services/document.service.js';
+import Insight from '../models/Insight.js';
+import { verifyToken } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
-
-// 🔥 CHAT (RAG)
 router.post('/chat', verifyToken, async (req, res) => {
     try {
-        const { message, history = [] } = req.body;
+        const { history = [] } = req.body;
 
         const recentInsights = await Insight.find({ userId: req.user.id })
             .sort({ createdAt: -1 })
             .limit(3);
 
         let context = "";
-
         recentInsights.forEach(doc => {
             context += `\nDocument: ${doc.filename}\n${doc.content.substring(0, 8000)}\n`;
         });
@@ -29,20 +26,18 @@ router.post('/chat', verifyToken, async (req, res) => {
             .join('\n');
 
         const prompt = `
+You are BuddyBot, an AI assistant for SmartSphere. 
+Use the following document context to answer the user's questions if it is relevant.
+
 Context:
 ${context}
 
-Conversation:
+Conversation History:
 ${conversationHistory}
-
-User: ${message}
 AI:
         `;
 
-        const reply = await analyzeText(
-            prompt,
-            "You are SmartSphere AI. Use context if helpful."
-        );
+        const reply = await chatWithAI(prompt);
 
         res.json({ reply });
 
@@ -52,8 +47,6 @@ AI:
     }
 });
 
-
-// 🔥 UPLOAD + AI TAGGING
 router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
     try {
         if (!req.file) {
@@ -67,13 +60,11 @@ router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
 
         const cleanText = extractedText.replace(/\s+/g, ' ').trim();
 
-        // 🧠 SUMMARY
         const summary = await analyzeText(
             `Summarize in 2 sentences:\n\n${cleanText.substring(0, 3000)}`,
             "You are a document summarizer."
         );
 
-        // 🧠 TAG GENERATION (NEW)
         const tagPrompt = `
 Extract 3-5 short tags from this document (comma separated):
 ${cleanText.substring(0, 2000)}
@@ -91,7 +82,7 @@ ${cleanText.substring(0, 2000)}
             fileType: req.file.mimetype,
             content: cleanText,
             summary,
-            tags, // 🔥 NEW
+            tags,
             source: 'local'
         });
 
@@ -108,8 +99,6 @@ ${cleanText.substring(0, 2000)}
     }
 });
 
-
-// 🔥 RECENT ACTIVITY
 router.get('/insights', verifyToken, async (req, res) => {
     try {
         const insights = await Insight.find({ userId: req.user.id })
@@ -124,4 +113,4 @@ router.get('/insights', verifyToken, async (req, res) => {
     }
 });
 
-module.exports = router;
+export default router;
