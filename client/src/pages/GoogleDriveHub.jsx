@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Cloud, FileText, Loader2, ArrowLeft, Search, AlertCircle, Folder, ChevronRight } from 'lucide-react';
+import { Cloud, FileText, Loader2, ArrowLeft, Search, AlertCircle, Folder, ChevronRight, ExternalLink, DownloadCloud } from 'lucide-react';
 
 export default function GoogleDriveHub() {
     const navigate = useNavigate();
@@ -9,30 +9,15 @@ export default function GoogleDriveHub() {
     const [importingFileId, setImportingFileId] = useState(null);
     const [isConnected, setIsConnected] = useState(false);
     
-    // NEW: Folder Navigation State
+    // Folder Navigation State
     const [currentFolder, setCurrentFolder] = useState({ id: 'root', name: 'My Drive' });
     const [folderHistory, setFolderHistory] = useState([]);
 
     useEffect(() => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const cloudStatus = urlParams.get('cloud');
-        const errorMsg = urlParams.get('msg');
-
-        if (cloudStatus) {
-            if (cloudStatus === 'success') {
-                alert('Successfully connected to Google Drive!');
-            } else if (cloudStatus === 'error') {
-                alert(`Failed to connect.\n\nReason: ${errorMsg || 'Check server logs.'}`);
-            }
-            window.history.replaceState({}, document.title, window.location.pathname);
-        }
-
-        // Fetch initial root files
         fetchDriveData('root');
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // NEW: Accepts a folderId parameter
     const fetchDriveData = async (folderId) => {
         setIsLoading(true);
         try {
@@ -72,14 +57,12 @@ export default function GoogleDriveHub() {
         }
     };
 
-    // NEW: Handle clicking a folder
     const handleFolderClick = (folderId, folderName) => {
-        setFolderHistory([...folderHistory, currentFolder]); // Push current to history
-        setCurrentFolder({ id: folderId, name: folderName }); // Set new current
-        fetchDriveData(folderId); // Fetch contents
+        setFolderHistory([...folderHistory, currentFolder]); 
+        setCurrentFolder({ id: folderId, name: folderName }); 
+        fetchDriveData(folderId); 
     };
 
-    // NEW: Handle going back up a directory
     const handleNavigateBack = () => {
         if (folderHistory.length === 0) return;
         const previousFolder = folderHistory[folderHistory.length - 1];
@@ -103,7 +86,7 @@ export default function GoogleDriveHub() {
             });
 
             if (res.ok) {
-                alert(`Successfully imported ${fileName}!`);
+                alert(`Successfully imported ${fileName}! You can now ask the AI about it.`);
             } else {
                 const errorData = await res.json();
                 alert(errorData.message);
@@ -116,6 +99,10 @@ export default function GoogleDriveHub() {
         }
     };
 
+    // Separate folders and files for clean UI rendering
+    const folders = driveFiles.filter(f => f.mimeType === 'application/vnd.google-apps.folder');
+    const files = driveFiles.filter(f => f.mimeType !== 'application/vnd.google-apps.folder');
+
     return (
         <div className="min-h-screen w-full bg-darkBg text-white p-8 relative overflow-hidden">
             <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none"></div>
@@ -123,115 +110,135 @@ export default function GoogleDriveHub() {
             <div className="max-w-5xl mx-auto relative z-10">
                 <header className="flex items-center justify-between mb-8 border-b border-glassBorder pb-6">
                     <div className="flex items-center gap-4">
-                        <button 
-                            onClick={() => navigate('/dashboard')}
-                            className="p-2 hover:bg-white/10 rounded-lg transition text-gray-400 hover:text-white"
-                        >
+                        <button onClick={() => navigate('/dashboard')} className="p-2 hover:bg-white/10 rounded-lg transition text-gray-400 hover:text-white">
                             <ArrowLeft size={24} />
                         </button>
                         <div>
                             <h1 className="text-3xl font-bold flex items-center gap-3">
                                 <Cloud className="text-blue-400" size={32} />
-                                Google Drive
+                                Google Drive Explorer
                             </h1>
-                            <p className="text-gray-400 mt-1">Manage and import your cloud documents to SmartSphere AI.</p>
+                            <p className="text-gray-400 mt-1">Browse, preview, and select files to import to your AI knowledge base.</p>
                         </div>
                     </div>
                 </header>
 
-                <div className="bg-glassBg backdrop-blur-xl border border-glassBorder rounded-2xl shadow-2xl p-6 min-h-[500px] flex flex-col">
+                <div className="bg-glassBg backdrop-blur-xl border border-glassBorder rounded-2xl shadow-2xl p-6 min-h-[600px] flex flex-col">
                     
-                    {/* NEW: Navigation Breadcrumbs */}
+                    {/* Navigation Breadcrumbs */}
                     {isConnected && !isLoading && (
-                        <div className="flex items-center gap-2 mb-6 px-2 text-sm text-gray-400">
+                        <div className="flex items-center gap-2 mb-6 px-2 text-sm text-gray-400 bg-white/5 p-3 rounded-lg border border-glassBorder">
                             <button 
                                 onClick={() => {
                                     setCurrentFolder({ id: 'root', name: 'My Drive' });
                                     setFolderHistory([]);
                                     fetchDriveData('root');
                                 }}
-                                className="hover:text-white transition font-medium"
+                                className="hover:text-blue-400 transition font-medium"
                             >
                                 My Drive
                             </button>
                             {folderHistory.length > 0 && (
                                 <>
                                     <ChevronRight size={16} />
-                                    <button onClick={handleNavigateBack} className="hover:text-white transition">...</button>
+                                    <button onClick={handleNavigateBack} className="hover:text-blue-400 transition font-medium">...</button>
                                 </>
                             )}
                             {currentFolder.id !== 'root' && (
                                 <>
                                     <ChevronRight size={16} />
-                                    <span className="text-blue-400 font-medium">{currentFolder.name}</span>
+                                    <span className="text-blue-400 font-bold">{currentFolder.name}</span>
                                 </>
                             )}
                         </div>
                     )}
 
-                    {/* File List Area */}
                     <div className="flex-1">
                         {isLoading ? (
                             <div className="flex flex-col items-center justify-center h-64 text-blue-400">
                                 <Loader2 className="animate-spin mb-4" size={40} />
-                                <p className="text-gray-400">Fetching files...</p>
+                                <p className="text-gray-400">Loading folder contents...</p>
                             </div>
                         ) : !isConnected ? (
                             <div className="flex flex-col items-center justify-center h-64 text-gray-300">
                                 <AlertCircle size={48} className="mb-4 text-blue-400 opacity-80" />
-                                <p className="mb-6 text-center max-w-md">Your Google Drive is not connected. Connect your account to import files and analyze them with AI.</p>
-                                <button 
-                                    onClick={handleConnectDrive}
-                                    className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition"
-                                >
+                                <button onClick={handleConnectDrive} className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition">
                                     Connect Google Drive
                                 </button>
                             </div>
                         ) : driveFiles.length === 0 ? (
                             <div className="flex flex-col items-center justify-center h-64 text-gray-500">
                                 <Search size={48} className="mb-4 opacity-50" />
-                                <p>This folder is empty or has no supported files.</p>
+                                <p>This folder is empty.</p>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 gap-3">
-                                {driveFiles.map((file) => {
-                                    const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
-
-                                    return (
-                                        <div key={file.id} className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-glassBorder hover:bg-white/10 transition group">
-                                            <div className="flex items-center gap-4 overflow-hidden">
-                                                <div className={`p-3 rounded-lg flex-shrink-0 ${isFolder ? 'bg-emerald-500/10 text-emerald-400' : 'bg-blue-500/10 text-blue-400'}`}>
-                                                    {isFolder ? <Folder size={24} fill="currentColor" className="opacity-80" /> : <FileText size={24} />}
-                                                </div>
-                                                <div className="truncate">
-                                                    <h4 className="font-medium text-white truncate pr-4">{file.name}</h4>
-                                                    <p className="text-xs text-gray-400 mt-0.5">
-                                                        {isFolder ? 'Folder' : `Modified: ${new Date(file.modifiedTime).toLocaleDateString()}`}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            
-                                            {/* Logic to either open folder or import file */}
-                                            {isFolder ? (
+                            <div className="space-y-6">
+                                {/* FOLDERS SECTION */}
+                                {folders.length > 0 && (
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3 px-2">Folders</h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            {folders.map(folder => (
                                                 <button 
-                                                    onClick={() => handleFolderClick(file.id, file.name)}
-                                                    className="flex-shrink-0 px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white rounded-lg text-sm font-medium border border-emerald-500/30 transition flex items-center gap-2 ml-4"
+                                                    key={folder.id} 
+                                                    onClick={() => handleFolderClick(folder.id, folder.name)}
+                                                    className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-glassBorder hover:bg-white/10 hover:border-blue-500/50 transition group text-left"
                                                 >
-                                                    Open
+                                                    <Folder size={20} className="text-emerald-400 flex-shrink-0" fill="currentColor" opacity={0.8} />
+                                                    <span className="font-medium text-sm truncate">{folder.name}</span>
                                                 </button>
-                                            ) : (
-                                                <button 
-                                                    onClick={() => handleImportFile(file.id, file.name, file.mimeType)}
-                                                    disabled={importingFileId === file.id}
-                                                    className="flex-shrink-0 px-4 py-2 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white disabled:opacity-50 disabled:hover:bg-blue-600/20 rounded-lg text-sm font-medium border border-blue-500/30 transition flex items-center gap-2 ml-4"
-                                                >
-                                                    {importingFileId === file.id ? <Loader2 size={16} className="animate-spin" /> : null}
-                                                    {importingFileId === file.id ? 'Importing...' : 'Import to AI'}
-                                                </button>
-                                            )}
+                                            ))}
                                         </div>
-                                    );
-                                })}
+                                    </div>
+                                )}
+
+                                {/* FILES SECTION */}
+                                {files.length > 0 && (
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3 px-2">Files</h3>
+                                        <div className="grid grid-cols-1 gap-3">
+                                            {files.map(file => (
+                                                <div key={file.id} className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-glassBorder hover:bg-white/10 transition group">
+                                                    <div className="flex items-center gap-4 overflow-hidden">
+                                                        <div className="p-3 rounded-lg bg-blue-500/10 text-blue-400 flex-shrink-0">
+                                                            <FileText size={20} />
+                                                        </div>
+                                                        <div className="truncate">
+                                                            <h4 className="font-medium text-white text-sm truncate pr-4">{file.name}</h4>
+                                                            <p className="text-xs text-gray-500 mt-0.5">Modified: {new Date(file.modifiedTime).toLocaleDateString()}</p>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div className="flex items-center gap-2 ml-4 flex-shrink-0">
+                                                        {/* NEW: View File Button */}
+                                                        {file.webViewLink && (
+                                                            <a 
+                                                                href={file.webViewLink} 
+                                                                target="_blank" 
+                                                                rel="noopener noreferrer"
+                                                                className="px-3 py-2 text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg text-xs font-medium border border-glassBorder transition flex items-center gap-1"
+                                                                title="See file in Google Drive"
+                                                            >
+                                                                <ExternalLink size={14} />
+                                                                See File
+                                                            </a>
+                                                        )}
+
+                                                        {/* Import Button */}
+                                                        <button 
+                                                            onClick={() => handleImportFile(file.id, file.name, file.mimeType)}
+                                                            disabled={importingFileId === file.id}
+                                                            className="px-3 py-2 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white disabled:opacity-50 disabled:hover:bg-blue-600/20 rounded-lg text-xs font-medium border border-blue-500/30 transition flex items-center gap-1"
+                                                        >
+                                                            {importingFileId === file.id ? <Loader2 size={14} className="animate-spin" /> : <DownloadCloud size={14} />}
+                                                            {importingFileId === file.id ? 'Importing...' : 'Import to AI'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

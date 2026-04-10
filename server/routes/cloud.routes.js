@@ -8,7 +8,7 @@ const Insight = require('../models/Insight');
 
 const router = express.Router();
 
-// This MUST match what is in your Google Cloud Console and your .env
+// OAuth setup
 const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
@@ -21,10 +21,10 @@ router.get('/google/auth', (req, res) => {
     if (!userId) return res.status(400).json({ message: "User ID required" });
 
     const authUrl = oauth2Client.generateAuthUrl({
-        access_type: 'offline', 
-        prompt: 'consent',      
-        scope: ['https://www.googleapis.com/auth/drive.readonly'], 
-        state: userId           
+        access_type: 'offline',
+        prompt: 'consent',
+        scope: ['https://www.googleapis.com/auth/drive.readonly'],
+        state: userId
     });
     
     res.json({ url: authUrl });
@@ -42,19 +42,17 @@ router.get('/google/callback', async (req, res) => {
 
         console.log(`Successfully connected Google Drive for User: ${userId}`);
         
-        // --- SUCCESS REDIRECT ---
         res.redirect('https://www.ialksng.me/projects/smartsphere/cloudhub/google?cloud=success');
         
     } catch (error) {
         console.error('Google OAuth Error:', error);
         
-        // --- ERROR REDIRECT WITH MESSAGE ---
         const errMsg = encodeURIComponent(error.message || 'Unknown server error');
         res.redirect(`https://www.ialksng.me/projects/smartsphere/cloudhub/google?cloud=error&msg=${errMsg}`);
     }
 });
 
-// 3. Fetch Google Drive Files (UPDATED FOR FOLDERS)
+// 3. Fetch Google Drive Files (FINAL MERGED VERSION)
 router.get('/google/files', verifyToken, async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
@@ -66,16 +64,13 @@ router.get('/google/files', verifyToken, async (req, res) => {
         oauth2Client.setCredentials(user.googleTokens);
         const drive = google.drive({ version: 'v3', auth: oauth2Client });
         
-        // Grab the requested folder ID from the URL, or default to the root Drive folder
         const targetFolderId = req.query.folderId || 'root';
         
         const response = await drive.files.list({
-            pageSize: 100, // Increased limit
-            fields: 'files(id, name, mimeType, modifiedTime)',
-            // Query exactly what is inside the target folder
+            pageSize: 1000, // 🔥 increased limit
+            fields: 'files(id, name, mimeType, modifiedTime, webViewLink)', // 🔥 added webViewLink
             q: `'${targetFolderId}' in parents and trashed = false`,
-            // Put folders at the top of the list, then sort by newest
-            orderBy: 'folder, modifiedTime desc'
+            orderBy: 'folder, name' // 🔥 folders first, alphabetical
         });
 
         res.json(response.data.files);
@@ -128,7 +123,7 @@ router.post('/google/import', verifyToken, async (req, res) => {
             fileType: finalMimeType,
             content: cleanText,
             summary: summary,
-            source: 'googledrive' 
+            source: 'googledrive'
         });
 
         await newInsight.save();
