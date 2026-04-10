@@ -1,13 +1,13 @@
-import express from 'express';
-import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
-import { google } from 'googleapis';
-import axios from 'axios';
+const express = require('express');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const { google } = require('googleapis');
+const axios = require('axios');
 
-import Insight from '../models/Insight.js';
-import User from '../models/User.js';
-import { verifyToken } from '../middleware/auth.middleware.js';
+const Insight = require('../models/Insight');
+const User = require('../models/User');
+const { verifyToken } = require('../middleware/auth.middleware');
 
 const router = express.Router();
 const MAX_STORAGE = 500 * 1024 * 1024;
@@ -441,4 +441,4 @@ router.delete('/:id', verifyToken, async (req, res) => {
     }
 });
 
-export default router;
+module.exports = router;
