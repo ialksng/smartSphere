@@ -13,6 +13,7 @@ export default function Dashboard() {
     const [driveFiles, setDriveFiles] = useState([]);
     const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
     const [isDriveLoading, setIsDriveLoading] = useState(false);
+    const [importingFileId, setImportingFileId] = useState(null);
 
     const fetchInsights = async () => {
         try {
@@ -30,7 +31,7 @@ export default function Dashboard() {
         }
     };
 
-    // --- NEW: Smart Google Drive Handler ---
+    // --- Smart Google Drive Handler ---
     const handleGoogleDriveClick = async () => {
         setIsDriveLoading(true);
         try {
@@ -59,6 +60,36 @@ export default function Dashboard() {
             console.error("Failed to communicate with Google Drive", error);
         } finally {
             setIsDriveLoading(false);
+        }
+    };
+
+    // --- NEW: Import File Handler ---
+    const handleImportFile = async (fileId, fileName, mimeType) => {
+        setImportingFileId(fileId);
+        try {
+            const res = await fetch('/projects/smartsphere/api/cloud/google/import', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('sphere_token')}` 
+                },
+                body: JSON.stringify({ fileId, fileName, mimeType })
+            });
+
+            if (res.ok) {
+                // Refresh the dashboard list to show the newly imported file
+                await fetchInsights(); 
+                setIsDriveModalOpen(false); // Close the modal
+                alert(`Successfully imported ${fileName}! You can now ask BuddyBot about it.`);
+            } else {
+                const errorData = await res.json();
+                alert(errorData.message);
+            }
+        } catch (error) {
+            console.error("Import failed", error);
+            alert("Failed to import document.");
+        } finally {
+            setImportingFileId(null);
         }
     };
 
@@ -164,7 +195,7 @@ export default function Dashboard() {
                     </div>
                 </div>
 
-                {/* --- NEW: GOOGLE DRIVE MODAL --- */}
+                {/* --- GOOGLE DRIVE MODAL --- */}
                 {isDriveModalOpen && (
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-8 z-50">
                         <div className="bg-[#0f172a] border border-glassBorder w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-full">
@@ -193,8 +224,13 @@ export default function Dashboard() {
                                                     </p>
                                                 </div>
                                             </div>
-                                            <button className="px-4 py-1.5 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white rounded-lg text-xs font-medium border border-blue-500/30 transition">
-                                                Import to AI
+                                            <button 
+                                                onClick={() => handleImportFile(file.id, file.name, file.mimeType)}
+                                                disabled={importingFileId === file.id}
+                                                className="px-4 py-1.5 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white disabled:opacity-50 disabled:hover:bg-blue-600/20 rounded-lg text-xs font-medium border border-blue-500/30 transition flex items-center gap-2"
+                                            >
+                                                {importingFileId === file.id ? <Loader2 size={14} className="animate-spin" /> : null}
+                                                {importingFileId === file.id ? 'Importing...' : 'Import to AI'}
                                             </button>
                                         </div>
                                     ))

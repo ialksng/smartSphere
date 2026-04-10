@@ -1,7 +1,10 @@
 const express = require('express');
 const { google } = require('googleapis');
-const User = require('../models/User'); // <-- Added the User model
-const { verifyToken } = require('../middleware/auth.middleware'); // <-- For protecting our new files route
+const User = require('../models/User'); 
+const { verifyToken } = require('../middleware/auth.middleware'); 
+const { extractTextFromBuffer } = require('../services/document.service');
+const { analyzeText } = require('../services/ai.service');
+const Insight = require('../models/Insight');
 
 const router = express.Router();
 
@@ -79,4 +82,66 @@ router.get('/google/files', verifyToken, async (req, res) => {
     }
 });
 
+// 4. --- NEW: Download & Import File to AI ---
+router.post('/google/import', verifyToken, async (req, res) => {
+    try {
+        const { fileId, fileName, mimeType } = req.body;
+        
+        const user = await User.findById(req.user.id);
+        if (!user || !user.googleTokens) {
+            return res.status(401).json({ message: "Google Drive not connected." });
+        }
+
+        oauth2Client.setCredentials(user.googleTokens);
+        const drive = google.drive({ version: 'v3', auth: oauth2Client });
+
+        let fileBuffer;
+        let finalMimeType = mimeType;
+
+        // Google Docs cannot be downloaded directly; they must be "exported" to text
+        if (mimeType === 'application/vnd.google-apps.document') {
+            const response = await drive.files.export(
+                { fileId: fileId, mimeType: 'text/plain' }, 
+                { responseType: 'arraybuffer' }
+            );
+            fileBuffer = Buffer.from(response.data);
+            finalMimeType = 'text/plain'; // Treat it as a standard text file now
+        } else {
+            // Standard files (PDFs, DOCX, TXT) can be downloaded directly
+            const response = await drive.files.get(
+                { fileId: fileId, alt: 'media' }, 
+                { responseType: 'arraybuffer' }
+            );
+            fileBuffer = Buffer.from(response.data);
+        }
+
+        // Pass the downloaded file into your existing RAG extraction pipeline!
+        const extractedText = await extractTextFromBuffer(fileBuffer, finalMimeType);
+        const cleanText = extractedText.replace(/\s+/g, ' ').trim();
+
+        // Generate the AI summary
+        const prompt = `Please provide a concise 2-sentence summary of the following document:\n\n${cleanText.substring(0, 3000)}`;
+        const summary = await analyzeText(prompt, "You are a helpful document summarizer.");
+
+        // Save to your MongoDB Insights database
+        const newInsight = new Insight({
+            userId: req.user.id,
+            filename: fileName,
+            fileType: finalMimeType,
+            content: cleanText,
+            summary: summary,
+            source: 'googledrive' // Tag it so you know it came from the cloud
+        });
+
+        await newInsight.save();
+
+        res.json({ message: "Import successful", insight: newInsight });
+
+    } catch (error) {
+        console.error("Import Error:", error);
+        res.status(500).json({ message: `Import failed: ${error.message}` });
+    }
+});
+
 module.exports = router;
+
