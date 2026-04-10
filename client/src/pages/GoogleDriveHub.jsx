@@ -38,7 +38,7 @@ export default function GoogleDriveHub() {
       });
 
       const data = await res.json();
-      setDriveFiles(data);
+      setDriveFiles(data || []);
 
     } catch (err) {
       console.error(err);
@@ -48,12 +48,20 @@ export default function GoogleDriveHub() {
   };
 
   const handleFolderClick = (id, name) => {
-    setFolderHistory([...folderHistory, currentFolder]);
+    setFolderHistory(prev => [...prev, currentFolder]);
     setCurrentFolder({ id, name });
     fetchDriveData(id);
   };
 
-  // 🔥 IMPORT HANDLER (DOCHUB + BUDDYBOT)
+  const handleBreadcrumbClick = (index) => {
+    const newHistory = folderHistory.slice(0, index);
+    const folder = folderHistory[index];
+
+    setFolderHistory(newHistory);
+    setCurrentFolder(folder);
+    fetchDriveData(folder.id);
+  };
+
   const handleImportFile = async (fileId, fileName, mimeType, target) => {
     try {
       setImportingFileId(fileId);
@@ -91,7 +99,6 @@ export default function GoogleDriveHub() {
   return (
     <div className="p-8">
 
-      {/* HEADER */}
       <div className="mb-6">
         <h1 className="text-2xl font-semibold flex items-center gap-2">
           <Cloud className="text-blue-400" />
@@ -102,7 +109,6 @@ export default function GoogleDriveHub() {
         </p>
       </div>
 
-      {/* SEARCH */}
       <div className="mb-6 flex gap-3">
         <div className="flex items-center w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3">
           <Search size={16} className="text-gray-400 mr-2" />
@@ -130,7 +136,9 @@ export default function GoogleDriveHub() {
             onClick={() => {
               setIsSearching(false);
               setSearchTerm('');
-              fetchDriveData(currentFolder.id);
+              setFolderHistory([]);
+              setCurrentFolder({ id: 'root', name: 'My Drive' });
+              fetchDriveData('root');
             }}
             className="px-4 py-3 bg-white/10 rounded-xl text-sm"
           >
@@ -139,7 +147,6 @@ export default function GoogleDriveHub() {
         )}
       </div>
 
-      {/* BREADCRUMBS */}
       <div className="flex items-center gap-2 mb-6 text-sm text-gray-400">
         <button
           onClick={() => {
@@ -154,14 +161,16 @@ export default function GoogleDriveHub() {
         {folderHistory.map((f, i) => (
           <div key={f.id} className="flex items-center gap-2">
             <ChevronRight size={14} />
-            <button onClick={() => handleFolderClick(f.id, f.name)}>
+            <button onClick={() => handleBreadcrumbClick(i)}>
               {f.name}
             </button>
           </div>
         ))}
+
+        <ChevronRight size={14} />
+        <span>{currentFolder.name}</span>
       </div>
 
-      {/* CONTENT */}
       <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
 
         {isLoading ? (
@@ -174,7 +183,6 @@ export default function GoogleDriveHub() {
           </div>
         ) : (
           <>
-            {/* FOLDERS */}
             {folders.length > 0 && (
               <div className="grid md:grid-cols-4 gap-4 mb-6">
                 {folders.map(folder => (
@@ -190,7 +198,6 @@ export default function GoogleDriveHub() {
               </div>
             )}
 
-            {/* FILES */}
             <div className="space-y-3">
               {files.map(file => (
                 <div
@@ -207,20 +214,15 @@ export default function GoogleDriveHub() {
                     </div>
                   </div>
 
-                  {/* 🔥 ACTIONS */}
                   <div className="flex items-center gap-4">
-
-                    {/* Open in Drive */}
                     {file.webViewLink && (
                       <a href={file.webViewLink} target="_blank" rel="noopener noreferrer">
                         <ExternalLink size={16} />
                       </a>
                     )}
 
-                    {/* Import to DocHub */}
                     <button
                       onClick={() => handleImportFile(file.id, file.name, file.mimeType, 'dochub')}
-                      title="Import to DocHub"
                       className="hover:text-blue-400"
                     >
                       {importingFileId === file.id
@@ -228,15 +230,12 @@ export default function GoogleDriveHub() {
                         : <DownloadCloud size={16} />}
                     </button>
 
-                    {/* 🔥 Send to BuddyBot */}
                     <button
                       onClick={() => handleImportFile(file.id, file.name, file.mimeType, 'buddybot')}
-                      title="Chat in BuddyBot"
                       className="hover:text-emerald-400"
                     >
                       <Bot size={16} />
                     </button>
-
                   </div>
                 </div>
               ))}

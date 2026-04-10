@@ -3,15 +3,12 @@ const router = express.Router();
 const Insight = require('../models/Insight');
 const { verifyToken } = require('../middleware/auth.middleware');
 
-
-// 🔥 GET ALL DOCS + SEARCH + FILTERS
 router.get('/', verifyToken, async (req, res) => {
     try {
         const { search, folder, favorite } = req.query;
 
         let query = { userId: req.user.id };
 
-        // 🔍 SEARCH
         if (search) {
             query.$or = [
                 { filename: { $regex: search, $options: 'i' } },
@@ -20,29 +17,62 @@ router.get('/', verifyToken, async (req, res) => {
             ];
         }
 
-        // 📁 FILTER BY FOLDER
         if (folder) {
             query.folder = folder;
         }
 
-        // ⭐ FILTER FAVORITES
         if (favorite === 'true') {
             query.isFavorite = true;
         }
 
-        const docs = await Insight.find(query)
-            .sort({ createdAt: -1 });
+        const docs = await Insight.find(query).sort({ createdAt: -1 });
 
-        res.json(docs);
+        const totalSize = docs.reduce((acc, doc) => {
+            return acc + Buffer.byteLength(doc.content || '', 'utf8');
+        }, 0);
+
+        res.json({
+            docs,
+            totalSize,
+            remaining: 500 * 1024 * 1024 - totalSize
+        });
 
     } catch (error) {
-        console.error("Fetch Docs Error:", error);
         res.status(500).json({ message: error.message });
     }
 });
 
+router.post('/', verifyToken, async (req, res) => {
+    try {
+        const { filename, content, folder, source } = req.body;
 
-// 🔥 GET SINGLE DOC
+        const docs = await Insight.find({ userId: req.user.id });
+
+        const currentSize = docs.reduce((acc, doc) => {
+            return acc + Buffer.byteLength(doc.content || '', 'utf8');
+        }, 0);
+
+        const newSize = Buffer.byteLength(content || '', 'utf8');
+
+        if (currentSize + newSize > 500 * 1024 * 1024) {
+            return res.status(400).json({ message: 'Storage limit exceeded' });
+        }
+
+        const doc = await Insight.create({
+            userId: req.user.id,
+            filename,
+            content,
+            folder,
+            source: source || 'local'
+        });
+
+        res.json(doc);
+
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
 router.get('/:id', verifyToken, async (req, res) => {
     try {
         const doc = await Insight.findOne({
@@ -51,19 +81,16 @@ router.get('/:id', verifyToken, async (req, res) => {
         });
 
         if (!doc) {
-            return res.status(404).json({ message: "Document not found" });
+            return res.status(404).json({ message: 'Document not found' });
         }
 
         res.json(doc);
 
     } catch (error) {
-        console.error("Get Doc Error:", error);
         res.status(500).json({ message: error.message });
     }
 });
 
-
-// 🔥 UPDATE DOC (CONTENT + FOLDER)
 router.put('/:id', verifyToken, async (req, res) => {
     try {
         const { content, folder } = req.body;
@@ -77,13 +104,10 @@ router.put('/:id', verifyToken, async (req, res) => {
         res.json(updated);
 
     } catch (error) {
-        console.error("Update Error:", error);
         res.status(500).json({ message: error.message });
     }
 });
 
-
-// ⭐ TOGGLE FAVORITE
 router.patch('/:id/favorite', verifyToken, async (req, res) => {
     try {
         const doc = await Insight.findOne({
@@ -92,7 +116,7 @@ router.patch('/:id/favorite', verifyToken, async (req, res) => {
         });
 
         if (!doc) {
-            return res.status(404).json({ message: "Document not found" });
+            return res.status(404).json({ message: 'Document not found' });
         }
 
         doc.isFavorite = !doc.isFavorite;
@@ -101,13 +125,10 @@ router.patch('/:id/favorite', verifyToken, async (req, res) => {
         res.json(doc);
 
     } catch (error) {
-        console.error("Favorite Error:", error);
         res.status(500).json({ message: error.message });
     }
 });
 
-
-// 🏷 ADD / UPDATE TAGS
 router.patch('/:id/tags', verifyToken, async (req, res) => {
     try {
         const { tags } = req.body;
@@ -121,13 +142,10 @@ router.patch('/:id/tags', verifyToken, async (req, res) => {
         res.json(updated);
 
     } catch (error) {
-        console.error("Tags Error:", error);
         res.status(500).json({ message: error.message });
     }
 });
 
-
-// 🔥 DELETE DOC
 router.delete('/:id', verifyToken, async (req, res) => {
     try {
         await Insight.findOneAndDelete({
@@ -135,10 +153,9 @@ router.delete('/:id', verifyToken, async (req, res) => {
             userId: req.user.id
         });
 
-        res.json({ message: "Deleted successfully" });
+        res.json({ message: 'Deleted successfully' });
 
     } catch (error) {
-        console.error("Delete Error:", error);
         res.status(500).json({ message: error.message });
     }
 });

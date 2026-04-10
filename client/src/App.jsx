@@ -9,13 +9,11 @@ import BuddyBot from './pages/BuddyBot';
 
 import MainLayout from './layouts/MainLayout';
 
-// 🔐 AUTH CHECK
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem('sphere_token');
   return token ? children : <Navigate to="/auth" replace />;
 };
 
-// 🔥 WRAPPER (avoids repetition)
 const ProtectedLayout = ({ children }) => (
   <ProtectedRoute>
     <MainLayout>{children}</MainLayout>
@@ -26,14 +24,8 @@ function App() {
   return (
     <BrowserRouter basename="/projects/smartsphere">
       <Routes>
-
-        {/* DEFAULT */}
         <Route path="/" element={<Navigate to="/auth" replace />} />
-
-        {/* PUBLIC */}
         <Route path="/auth" element={<Auth />} />
-
-        {/* 🔥 PROTECTED ROUTES */}
 
         <Route 
           path="/dashboard" 
@@ -80,9 +72,7 @@ function App() {
           } 
         />
 
-        {/* FALLBACK */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
-
       </Routes>
     </BrowserRouter>
   );

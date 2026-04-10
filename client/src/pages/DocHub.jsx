@@ -8,6 +8,7 @@ const DocHub = () => {
   const [docs, setDocs] = useState([]);
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [content, setContent] = useState("");
+  const [remaining, setRemaining] = useState(0);
 
   useEffect(() => {
     fetchDocs();
@@ -22,7 +23,8 @@ const DocHub = () => {
       });
 
       const data = await res.json();
-      setDocs(data);
+      setDocs(data.docs || []);
+      setRemaining(data.remaining || 0);
 
       if (location.state?.docId) {
         openDoc(location.state.docId);
@@ -50,12 +52,30 @@ const DocHub = () => {
     }
   };
 
+  const saveDoc = async () => {
+    if (!selectedDoc) return;
+
+    await fetch(`/projects/smartsphere/api/dochub/${selectedDoc._id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
+      },
+      body: JSON.stringify({ content })
+    });
+
+    fetchDocs();
+  };
+
   return (
     <div className="flex h-full">
 
-      {/* LEFT */}
       <div className="w-72 border-r border-white/10 p-4 bg-white/5">
-        <h2 className="text-lg font-semibold mb-4">Documents</h2>
+        <h2 className="text-lg font-semibold mb-2">Documents</h2>
+
+        <p className="text-xs text-gray-400 mb-4">
+          Remaining: {(remaining / (1024 * 1024)).toFixed(2)} MB
+        </p>
 
         {docs.map(doc => (
           <div
@@ -71,18 +91,35 @@ const DocHub = () => {
               <FileText size={14} />
               <p className="text-sm truncate">{doc.filename}</p>
             </div>
+
+            <p className="text-xs text-gray-400 mt-1">
+              {doc.source === "google" && "Google Drive"}
+              {doc.source === "onedrive" && "OneDrive"}
+              {doc.source === "local" && "Local"}
+            </p>
           </div>
         ))}
       </div>
 
-      {/* RIGHT */}
-      <div className="flex-1 p-6">
+      <div className="flex-1 p-6 flex flex-col">
         {selectedDoc ? (
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            className="w-full h-full bg-transparent outline-none resize-none"
-          />
+          <>
+            <div className="flex justify-between mb-3">
+              <h2 className="font-semibold">{selectedDoc.filename}</h2>
+              <button
+                onClick={saveDoc}
+                className="px-4 py-1 bg-blue-600 rounded"
+              >
+                Save
+              </button>
+            </div>
+
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              className="w-full flex-1 bg-transparent outline-none resize-none"
+            />
+          </>
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500">
             Select a document
@@ -94,4 +131,4 @@ const DocHub = () => {
   );
 };
 
-export default DocHub; // 🔥 THIS LINE FIXES YOUR BUILD ERROR
+export default DocHub;
