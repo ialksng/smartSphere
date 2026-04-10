@@ -2,6 +2,22 @@ const express = require('express');
 const router = express.Router();
 const Insight = require('../models/Insight');
 const { verifyToken } = require('../middleware/auth.middleware');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const dir = 'uploads/';
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir);
+        cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + '-' + file.originalname);
+    }
+});
+
+const upload = multer({ storage });
 
 router.get('/', verifyToken, async (req, res) => {
     try {
@@ -15,6 +31,39 @@ router.get('/', verifyToken, async (req, res) => {
         const docs = await Insight.find(query).sort({ type: -1, createdAt: -1 });
 
         res.json(docs);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
+    try {
+        const file = req.file;
+
+        const size = file.size;
+
+        const totalSize = await Insight.aggregate([
+            { $match: { userId: req.user.id } },
+            { $group: { _id: null, total: { $sum: "$size" } } }
+        ]);
+
+        const used = totalSize[0]?.total || 0;
+
+        if (used + size > 500 * 1024 * 1024) {
+            return res.status(400).json({ message: "Storage limit exceeded (500MB)" });
+        }
+
+        const doc = await Insight.create({
+            userId: req.user.id,
+            filename: file.originalname,
+            type: 'file',
+            filePath: file.path,
+            size,
+            fileType: path.extname(file.originalname),
+            source: 'local'
+        });
+
+        res.json(doc);
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
@@ -127,6 +176,12 @@ router.patch('/:id/move', verifyToken, async (req, res) => {
 
 router.delete('/:id', verifyToken, async (req, res) => {
     try {
+        const doc = await Insight.findOne({ _id: req.params.id, userId: req.user.id });
+
+        if (doc?.filePath && fs.existsSync(doc.filePath)) {
+            fs.unlinkSync(doc.filePath);
+        }
+
         await Insight.deleteMany({
             userId: req.user.id,
             $or: [

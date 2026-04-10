@@ -33,11 +33,11 @@ export default function MainLayout({ children }) {
             onClick={() => navigate('/dashboard')}
           />
 
-          {/* DOCHUB */}
+          {/* MY STORAGE */}
           <NavItem
             icon={<FileText size={18} />}
-            label="DocHub"
-            onClick={() => navigate('/dochub')}
+            label="MyStorage"
+            onClick={() => navigate('/mystorage')}
           />
 
           {/* CLOUD HUB */}
@@ -47,11 +47,11 @@ export default function MainLayout({ children }) {
             onClick={() => navigate('/cloudhub')}
           />
 
-          {/* MY STORAGE */}
+          {/* DOCHUB */}
           <NavItem
             icon={<FileText size={18} />}
-            label="MyStorage"
-            onClick={() => navigate('/mystorage')}
+            label="DocHub"
+            onClick={() => navigate('/dochub')}
           />
 
           {/* BUDDYBOT */}

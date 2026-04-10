@@ -1,5 +1,6 @@
 const express = require('express');
 const { google } = require('googleapis');
+const fs = require('fs');
 const User = require('../models/User');
 const { verifyToken } = require('../middleware/auth.middleware');
 const { extractTextFromBuffer } = require('../services/document.service');
@@ -73,7 +74,7 @@ router.get('/google/files', verifyToken, async (req, res) => {
         });
 
         res.json(response.data.files);
-    } catch (error) {
+    } catch {
         res.status(500).json({ message: 'Failed to fetch files' });
     }
 });
@@ -140,11 +141,8 @@ router.post('/google/import', verifyToken, async (req, res) => {
 
         await newInsight.save();
 
-        res.json({
-            message: 'Import successful',
-            insight: newInsight
-        });
-    } catch (error) {
+        res.json({ message: 'Import successful', insight: newInsight });
+    } catch {
         res.status(500).json({ message: 'Import failed' });
     }
 });
@@ -153,17 +151,13 @@ router.post('/google/upload-dochub', verifyToken, async (req, res) => {
     try {
         const { fileId } = req.body;
 
-        if (!fileId) {
-            return res.status(400).json({ message: 'File ID is required' });
-        }
-
         const file = await Insight.findById(fileId);
+
+        const user = await User.findById(req.user.id);
 
         if (!file || file.userId.toString() !== req.user.id) {
             return res.status(404).json({ message: 'File not found' });
         }
-
-        const user = await User.findById(req.user.id);
 
         if (!user?.googleTokens) {
             return res.status(401).json({ message: 'Google Drive not connected' });
@@ -189,11 +183,51 @@ router.post('/google/upload-dochub', verifyToken, async (req, res) => {
             source: 'google_drive'
         });
 
-        res.json({
-            message: 'Upload successful',
-            file: response.data
+        res.json({ message: 'Upload successful', file: response.data });
+    } catch {
+        res.status(500).json({ message: 'Upload failed' });
+    }
+});
+
+router.post('/google/upload-local', verifyToken, async (req, res) => {
+    try {
+        const { fileId } = req.body;
+
+        const file = await Insight.findById(fileId);
+        const user = await User.findById(req.user.id);
+
+        if (!file || file.userId.toString() !== req.user.id) {
+            return res.status(404).json({ message: 'File not found' });
+        }
+
+        if (!user?.googleTokens) {
+            return res.status(401).json({ message: 'Google Drive not connected' });
+        }
+
+        if (!file.filePath || !fs.existsSync(file.filePath)) {
+            return res.status(400).json({ message: 'Local file not found on server' });
+        }
+
+        oauth2Client.setCredentials(user.googleTokens);
+        const drive = google.drive({ version: 'v3', auth: oauth2Client });
+
+        const response = await drive.files.create({
+            requestBody: {
+                name: file.filename
+            },
+            media: {
+                body: fs.createReadStream(file.filePath)
+            }
         });
-    } catch (error) {
+
+        await Insight.findByIdAndUpdate(fileId, {
+            driveFileId: response.data.id,
+            fileUrl: `https://drive.google.com/file/d/${response.data.id}/view`,
+            source: 'google_drive'
+        });
+
+        res.json({ message: 'Uploaded to Drive', file: response.data });
+    } catch {
         res.status(500).json({ message: 'Upload failed' });
     }
 });
@@ -217,7 +251,7 @@ router.get('/google/storage', verifyToken, async (req, res) => {
         const total = Number(response.data.storageQuota.limit || 0);
 
         res.json({ used, total });
-    } catch (error) {
+    } catch {
         res.status(500).json({ message: 'Failed to fetch storage info' });
     }
 });
