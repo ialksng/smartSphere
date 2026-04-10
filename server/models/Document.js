@@ -14,6 +14,12 @@ const documentSchema = new mongoose.Schema({
 
   size: Number,
 
+  folderId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Folder",
+  default: null
+  },
+
   createdAt: { type: Date, default: Date.now }
 });
 
