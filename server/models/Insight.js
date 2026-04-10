@@ -4,18 +4,19 @@ const insightSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: true,
+    index: true
   },
 
   filename: {
     type: String,
-    required: true
+    required: true,
+    trim: true
   },
 
   content: {
     type: String,
-    default: "",
-    required: false
+    default: ""
   },
 
   summary: {
@@ -28,6 +29,11 @@ const insightSchema = new mongoose.Schema({
     default: "text"
   },
 
+  mimeType: {
+    type: String,
+    default: "text/plain"
+  },
+
   contentType: {
     type: String,
     enum: ['text', 'pdf', 'image'],
@@ -37,25 +43,22 @@ const insightSchema = new mongoose.Schema({
   type: {
     type: String,
     enum: ['file', 'folder'],
-    default: 'file'
+    default: 'file',
+    index: true
   },
 
   parentId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Insight',
-    default: null
-  },
-
-  folder: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Insight',
-    default: null
+    default: null,
+    index: true
   },
 
   source: {
     type: String,
     enum: ['local', 'google_drive', 'onedrive'],
-    default: 'local'
+    default: 'local',
+    index: true
   },
 
   driveFileId: {
@@ -70,7 +73,14 @@ const insightSchema = new mongoose.Schema({
 
   isFavorite: {
     type: Boolean,
-    default: false
+    default: false,
+    index: true
+  },
+
+  isTrashed: {
+    type: Boolean,
+    default: false,
+    index: true
   },
 
   tags: {
@@ -81,6 +91,11 @@ const insightSchema = new mongoose.Schema({
   size: {
     type: Number,
     default: 0
+  },
+
+  lastOpened: {
+    type: Date,
+    default: null
   }
 
 }, { timestamps: true });
