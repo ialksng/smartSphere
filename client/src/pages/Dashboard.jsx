@@ -1,104 +1,135 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import ChatInterface from '../components/ChatInterface';
-import { FileText, BrainCircuit, HardDrive, Loader2 } from 'lucide-react';
+import {
+  FileText, Cloud, Bot, Plus, Loader2
+} from 'lucide-react';
 
 export default function Dashboard() {
   const navigate = useNavigate();
 
-  const [insights, setInsights] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [docs, setDocs] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const fetchInsights = async () => {
+  useEffect(() => {
+    fetchDocs();
+  }, []);
+
+  const fetchDocs = async () => {
     try {
-      const res = await fetch('/projects/smartsphere/api/ai/insights', {
+      const res = await fetch('/projects/smartsphere/api/dochub', {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
         }
       });
 
       const data = await res.json();
-      setInsights(data);
+      setDocs(data);
 
-    } catch (error) {
-      console.error("Failed to fetch insights", error);
+    } catch (err) {
+      console.error(err);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchInsights();
-  }, []);
-
   return (
-    <div className="flex h-full">
+    <div className="p-8 space-y-8">
 
-      {/* MAIN CONTENT */}
-      <div className="flex-1 p-8 overflow-y-auto">
+      {/* 🔥 HEADER */}
+      <div>
+        <h1 className="text-2xl font-semibold">Welcome back</h1>
+        <p className="text-gray-400 text-sm">
+          Your AI-powered cloud workspace
+        </p>
+      </div>
 
-        {/* HEADER */}
-        <div className="mb-6">
-          <h2 className="text-2xl font-semibold">Dashboard</h2>
-          <p className="text-gray-400 text-sm">
-            Your AI-powered document workspace
-          </p>
-        </div>
+      {/* 🔥 QUICK ACTIONS */}
+      <div className="grid md:grid-cols-3 gap-6">
 
-        {/* STATS */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <StatCard 
-            title="Documents" 
-            value={insights.length} 
-            icon={<FileText size={20} />} 
-          />
-          <StatCard 
-            title="Insights" 
-            value={insights.length * 3} 
-            icon={<BrainCircuit size={20} />} 
-          />
-          <StatCard 
-            title="Storage" 
-            value="Local" 
-            icon={<HardDrive size={20} />} 
-          />
-        </div>
+        <ActionCard
+          icon={<Cloud />}
+          title="Import from Cloud"
+          desc="Connect and import files"
+          onClick={() => navigate('/cloudhub')}
+        />
 
-        {/* INSIGHTS */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-          <h3 className="text-lg font-semibold mb-4">Recent Documents</h3>
+        <ActionCard
+          icon={<FileText />}
+          title="Open DocHub"
+          desc="View and edit documents"
+          onClick={() => navigate('/dochub')}
+        />
 
-          {isLoading ? (
-            <div className="flex justify-center py-10">
-              <Loader2 className="animate-spin" />
-            </div>
-          ) : insights.length === 0 ? (
-            <div className="text-center text-gray-500 py-10">
-              No documents yet. Import from Drive to get started.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {insights.map(doc => (
-                <div
-                  key={doc._id}
-                  onClick={() => navigate('/dochub', { state: { docId: doc._id } })}
-                  className="p-4 rounded-xl bg-white/5 hover:bg-white/10 cursor-pointer border border-white/10"
-                >
-                  <p className="font-medium">{doc.filename}</p>
-                  <p className="text-sm text-gray-400">
-                    {doc.summary}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <ActionCard
+          icon={<Bot />}
+          title="Ask BuddyBot"
+          desc="Chat with your documents"
+          onClick={() => navigate('/buddybot')}
+        />
 
       </div>
 
-      {/* AI PANEL */}
-      <div className="w-[350px] border-l border-white/10 p-4">
-        <ChatInterface onInsightAdded={fetchInsights} />
+      {/* 🔥 RECENT DOCUMENTS */}
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+        <h2 className="text-lg font-semibold mb-4">Recent Documents</h2>
+
+        {loading ? (
+          <div className="flex justify-center py-10">
+            <Loader2 className="animate-spin" />
+          </div>
+        ) : docs.length === 0 ? (
+          <div className="text-gray-500 text-center py-10">
+            No documents yet. Import from CloudHub.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {docs.slice(0, 5).map(doc => (
+              <div
+                key={doc._id}
+                onClick={() => navigate('/dochub', { state: { docId: doc._id } })}
+                className="p-4 rounded-xl bg-white/5 hover:bg-white/10 cursor-pointer border border-white/10"
+              >
+                <p className="font-medium">{doc.filename}</p>
+                <p className="text-sm text-gray-400">
+                  {doc.summary || "No summary available"}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 🔥 CLOUD OVERVIEW */}
+      <div className="grid md:grid-cols-2 gap-6">
+
+        <div
+          onClick={() => navigate('/cloudhub')}
+          className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 cursor-pointer"
+        >
+          <div className="flex items-center gap-3 mb-2">
+            <Cloud className="text-blue-400" />
+            <h2 className="text-lg font-medium">CloudHub</h2>
+          </div>
+
+          <p className="text-sm text-gray-400">
+            Manage Google Drive, OneDrive, Dropbox
+          </p>
+        </div>
+
+        <div
+          onClick={() => navigate('/buddybot')}
+          className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 cursor-pointer"
+        >
+          <div className="flex items-center gap-3 mb-2">
+            <Bot className="text-emerald-400" />
+            <h2 className="text-lg font-medium">BuddyBot</h2>
+          </div>
+
+          <p className="text-sm text-gray-400">
+            Chat with your documents using AI
+          </p>
+        </div>
+
       </div>
 
     </div>
@@ -106,14 +137,16 @@ export default function Dashboard() {
 }
 
 // COMPONENTS
-function StatCard({ title, value, icon }) {
+
+function ActionCard({ icon, title, desc, onClick }) {
   return (
-    <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-3">
-      {icon}
-      <div>
-        <p className="text-sm text-gray-400">{title}</p>
-        <p className="text-xl font-semibold">{value}</p>
-      </div>
+    <div
+      onClick={onClick}
+      className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 cursor-pointer transition"
+    >
+      <div className="mb-3">{icon}</div>
+      <h3 className="text-lg font-medium">{title}</h3>
+      <p className="text-sm text-gray-400 mt-1">{desc}</p>
     </div>
   );
 }
