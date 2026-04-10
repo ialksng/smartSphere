@@ -1,10 +1,11 @@
-import express from 'express';
-import multer from 'multer';
-import { analyzeText, chatWithAI } from '../services/ai.service.js';
-import { extractTextFromBuffer } from '../services/document.service.js';
-import Insight from '../models/Insight.js';
-import Message from '../models/Message.js'; // Import the new model
-import { verifyToken } from '../middleware/auth.middleware.js';
+// 1. Change all 'import' statements to 'require'
+const express = require('express');
+const multer = require('multer');
+const { analyzeText, chatWithAI } = require('../services/ai.service.js');
+const { extractTextFromBuffer } = require('../services/document.service.js');
+const Insight = require('../models/Insight.js');
+const Message = require('../models/Message.js'); 
+const { verifyToken } = require('../middleware/auth.middleware.js');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -129,4 +130,5 @@ router.get('/insights', verifyToken, async (req, res) => {
     }
 });
 
-export default router;
+// 2. Change 'export default router' to 'module.exports'
+module.exports = router;
