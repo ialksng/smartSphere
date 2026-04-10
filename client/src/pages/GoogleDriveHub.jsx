@@ -114,7 +114,7 @@ export default function GoogleDriveHub() {
                         <div>
                             <h1 className="text-3xl font-bold flex items-center gap-3">
                                 <Cloud className="text-blue-400" size={32} />
-                                Google Drive Hub
+                                Google Drive
                             </h1>
                             <p className="text-gray-400 mt-1">Manage and import your cloud documents to SmartSphere AI.</p>
                         </div>
