@@ -11,11 +11,14 @@ export default function ChatInterface({ onInsightAdded }) {
     const [showAttachMenu, setShowAttachMenu] = useState(false);
     const [showCloudMenu, setShowCloudMenu] = useState(false);
     
-    // Picker Modal States
+    // My Storage Modal States
     const [isMyStorageModalOpen, setIsMyStorageModalOpen] = useState(false);
     const [myStorageFiles, setMyStorageFiles] = useState([]);
     const [isLoadingStorage, setIsLoadingStorage] = useState(false);
+    const [currentStorageFolder, setCurrentStorageFolder] = useState({ id: null, name: 'My Storage' });
+    const [storageFolderHistory, setStorageFolderHistory] = useState([]);
 
+    // Google Drive Modal States
     const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
     const [driveFiles, setDriveFiles] = useState([]);
     const [isLoadingDrive, setIsLoadingDrive] = useState(false);
@@ -59,7 +62,6 @@ export default function ChatInterface({ onInsightAdded }) {
         setIsLoading(true);
 
         try {
-            // Keep the last 15 messages for AI context to avoid payload limits
             const cleanHistory = newHistory.filter(msg => !msg.isSystem).slice(-15);
 
             const res = await fetch('/projects/smartsphere/api/ai/chat', {
@@ -127,12 +129,20 @@ export default function ChatInterface({ onInsightAdded }) {
     };
 
     // --- 2. MY STORAGE (DocHub) LOGIC ---
-    const openMyStorageModal = async () => {
+    const openMyStorageModal = () => {
         setShowAttachMenu(false);
+        setShowCloudMenu(false);
         setIsMyStorageModalOpen(true);
+        setStorageFolderHistory([]);
+        setCurrentStorageFolder({ id: null, name: 'My Storage' });
+        fetchMyStorageData(null);
+    };
+
+    const fetchMyStorageData = async (parentId = null) => {
         setIsLoadingStorage(true);
         try {
-            const res = await fetch('/projects/smartsphere/api/dochub', {
+            const url = parentId ? `/projects/smartsphere/api/dochub?parentId=${parentId}` : '/projects/smartsphere/api/dochub';
+            const res = await fetch(url, {
                 headers: { Authorization: `Bearer ${localStorage.getItem('sphere_token')}` }
             });
             const data = await res.json();
@@ -142,6 +152,20 @@ export default function ChatInterface({ onInsightAdded }) {
         } finally {
             setIsLoadingStorage(false);
         }
+    };
+
+    const handleStorageFolderClick = (id, name) => {
+        setStorageFolderHistory(prev => [...prev, currentStorageFolder]);
+        setCurrentStorageFolder({ id, name });
+        fetchMyStorageData(id);
+    };
+
+    const handleStorageBreadcrumbClick = (index) => {
+        const newHistory = storageFolderHistory.slice(0, index);
+        const folder = storageFolderHistory[index];
+        setStorageFolderHistory(newHistory);
+        setCurrentStorageFolder(folder);
+        fetchMyStorageData(folder.id);
     };
 
     const handleSelectMyStorageFile = async (file) => {
@@ -234,32 +258,61 @@ export default function ChatInterface({ onInsightAdded }) {
     return (
         <div className="flex flex-col h-full w-full bg-glassBg backdrop-blur-xl border border-glassBorder rounded-2xl shadow-2xl overflow-hidden text-white relative">
             
-            {/* --- FIXED MODALS OVERLAYS --- */}
+            {/* --- MY STORAGE MODAL --- */}
             {isMyStorageModalOpen && (
                 <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-[#0b0f19] border border-glassBorder rounded-2xl w-full max-w-md h-[70vh] flex flex-col overflow-hidden shadow-2xl">
+                    <div className="bg-[#0b0f19] border border-glassBorder rounded-2xl w-full max-w-lg h-[80vh] flex flex-col overflow-hidden shadow-2xl">
                         <div className="p-4 border-b border-glassBorder flex items-center justify-between bg-white/5">
-                            <h3 className="font-semibold flex items-center gap-2"><HardDrive size={18} className="text-emerald-400"/> Select from Storage</h3>
+                            <h3 className="font-semibold flex items-center gap-2"><HardDrive size={18} className="text-emerald-400"/> My Storage</h3>
                             <button onClick={() => setIsMyStorageModalOpen(false)} className="text-gray-400 hover:text-white"><X size={20}/></button>
                         </div>
+                        
+                        {/* Storage Breadcrumbs */}
+                        <div className="px-4 py-3 bg-black/40 border-b border-glassBorder flex items-center gap-2 text-xs text-gray-400 overflow-x-auto">
+                            <button onClick={() => { setCurrentStorageFolder({id: null, name: 'My Storage'}); setStorageFolderHistory([]); fetchMyStorageData(null); }} className="hover:text-white whitespace-nowrap">My Storage</button>
+                            {storageFolderHistory.map((f, i) => (
+                                <div key={f.id} className="flex items-center gap-2 whitespace-nowrap">
+                                    <ChevronRight size={12} />
+                                    <button onClick={() => handleStorageBreadcrumbClick(i)} className="hover:text-white">{f.name}</button>
+                                </div>
+                            ))}
+                            {currentStorageFolder.id && (
+                                <>
+                                    <ChevronRight size={12} />
+                                    <span className="text-white whitespace-nowrap">{currentStorageFolder.name}</span>
+                                </>
+                            )}
+                        </div>
+
+                        {/* Storage File List */}
                         <div className="flex-1 overflow-y-auto p-4 space-y-2">
                             {isLoadingStorage ? (
                                 <div className="flex justify-center py-10"><Loader2 className="animate-spin text-blue-400" size={24}/></div>
                             ) : myStorageFiles.length === 0 ? (
-                                <div className="text-center text-gray-500 py-10">No files found in DocHub</div>
+                                <div className="text-center text-gray-500 py-10">Folder is empty</div>
                             ) : (
-                                myStorageFiles.map(file => (
-                                    <button key={file._id} onClick={() => handleSelectMyStorageFile(file)} className="w-full flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition border border-transparent hover:border-white/10 text-left">
-                                        <FileText className="text-blue-400" size={18} />
-                                        <span className="text-sm truncate flex-1">{file.filename}</span>
-                                    </button>
-                                ))
+                                <>
+                                    {myStorageFiles.filter(f => f.type === 'folder').map(folder => (
+                                        <button key={folder._id} onClick={() => handleStorageFolderClick(folder._id, folder.filename)} className="w-full flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition border border-transparent hover:border-white/10 text-left">
+                                            <Folder className="text-emerald-400" size={18} />
+                                            <span className="text-sm truncate flex-1">{folder.filename}</span>
+                                            <ChevronRight size={16} className="text-gray-500"/>
+                                        </button>
+                                    ))}
+                                    {myStorageFiles.filter(f => f.type !== 'folder').map(file => (
+                                        <button key={file._id} onClick={() => handleSelectMyStorageFile(file)} className="w-full flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-blue-600/20 transition border border-transparent hover:border-blue-500/30 text-left">
+                                            <FileText className="text-blue-400" size={18} />
+                                            <span className="text-sm truncate flex-1">{file.filename}</span>
+                                        </button>
+                                    ))}
+                                </>
                             )}
                         </div>
                     </div>
                 </div>
             )}
 
+            {/* --- GOOGLE DRIVE MODAL --- */}
             {isDriveModalOpen && (
                 <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-[#0b0f19] border border-glassBorder rounded-2xl w-full max-w-lg h-[80vh] flex flex-col overflow-hidden shadow-2xl">
