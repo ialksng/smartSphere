@@ -30,34 +30,27 @@ router.get('/google/auth', (req, res) => {
     res.json({ url: authUrl });
 });
 
-// 2. Handle Callback & Save Tokens
+// 2. Handle Callback
 router.get('/google/callback', async (req, res) => {
     const { code, state: userId } = req.query; 
     
     try {
-        if (!code) throw new Error("No authorization code provided.");
-
         const { tokens } = await oauth2Client.getToken(code);
         await User.findByIdAndUpdate(userId, { googleTokens: tokens });
 
-        console.log(`Successfully connected Google Drive for User: ${userId}`);
-        
         res.redirect('https://www.ialksng.me/projects/smartsphere/cloudhub/google?cloud=success');
         
     } catch (error) {
-        console.error('Google OAuth Error:', error);
-        
-        const errMsg = encodeURIComponent(error.message || 'Unknown server error');
+        const errMsg = encodeURIComponent(error.message || 'Unknown error');
         res.redirect(`https://www.ialksng.me/projects/smartsphere/cloudhub/google?cloud=error&msg=${errMsg}`);
     }
 });
 
-// 3. Fetch Google Drive Files (WITH SEARCH + BREADCRUMB SUPPORT)
+// 3. Fetch Files
 router.get('/google/files', verifyToken, async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
-        
-        if (!user || !user.googleTokens) {
+        if (!user?.googleTokens) {
             return res.status(401).json({ message: "Google Drive not connected." });
         }
 
@@ -69,14 +62,13 @@ router.get('/google/files', verifyToken, async (req, res) => {
 
         let query = `'${targetFolderId}' in parents and trashed = false`;
 
-        // 🔥 SEARCH MODE
         if (searchQuery) {
             query = `name contains '${searchQuery}' and trashed = false`;
         }
 
         const response = await drive.files.list({
             pageSize: 1000,
-            fields: 'files(id, name, mimeType, modifiedTime, webViewLink, parents)',
+            fields: 'files(id, name, mimeType, modifiedTime, webViewLink)',
             q: query,
             orderBy: 'folder, name'
         });
@@ -84,18 +76,18 @@ router.get('/google/files', verifyToken, async (req, res) => {
         res.json(response.data.files);
 
     } catch (error) {
-        console.error("Fetch Drive Files Error:", error);
-        res.status(500).json({ message: "Failed to fetch files from Google Drive." });
+        console.error(error);
+        res.status(500).json({ message: "Failed to fetch files" });
     }
 });
 
-// 4. Import File
+// 4. Import File (SMART PREVIEW READY)
 router.post('/google/import', verifyToken, async (req, res) => {
     try {
         const { fileId, fileName, mimeType } = req.body;
-        
+
         const user = await User.findById(req.user.id);
-        if (!user || !user.googleTokens) {
+        if (!user?.googleTokens) {
             return res.status(401).json({ message: "Google Drive not connected." });
         }
 
@@ -105,16 +97,23 @@ router.post('/google/import', verifyToken, async (req, res) => {
         let fileBuffer;
         let finalMimeType = mimeType;
 
+        // 🔥 GET FILE METADATA (IMPORTANT FOR PREVIEW)
+        const fileMeta = await drive.files.get({
+            fileId,
+            fields: 'webViewLink'
+        });
+
+        // Google Docs export
         if (mimeType === 'application/vnd.google-apps.document') {
             const response = await drive.files.export(
-                { fileId, mimeType: 'text/plain' }, 
+                { fileId, mimeType: 'text/plain' },
                 { responseType: 'arraybuffer' }
             );
             fileBuffer = Buffer.from(response.data);
             finalMimeType = 'text/plain';
         } else {
             const response = await drive.files.get(
-                { fileId, alt: 'media' }, 
+                { fileId, alt: 'media' },
                 { responseType: 'arraybuffer' }
             );
             fileBuffer = Buffer.from(response.data);
@@ -123,25 +122,42 @@ router.post('/google/import', verifyToken, async (req, res) => {
         const extractedText = await extractTextFromBuffer(fileBuffer, finalMimeType);
         const cleanText = extractedText.replace(/\s+/g, ' ').trim();
 
-        const prompt = `Summarize in 2 sentences:\n\n${cleanText.substring(0, 3000)}`;
-        const summary = await analyzeText(prompt, "You are a helpful document summarizer.");
+        const summary = await analyzeText(
+            `Summarize in 2 sentences:\n\n${cleanText.substring(0, 3000)}`,
+            "You are a helpful document summarizer."
+        );
 
+        // 🔥 FINAL DOC OBJECT
         const newInsight = new Insight({
             userId: req.user.id,
             filename: fileName,
             fileType: finalMimeType,
             content: cleanText,
             summary,
-            source: 'googledrive'
+
+            source: 'google_drive',
+            driveFileId: fileId,
+
+            contentType: finalMimeType.includes('pdf')
+                ? 'pdf'
+                : finalMimeType.includes('image')
+                ? 'image'
+                : 'text',
+
+            // 🔥 THIS MAKES PREVIEW WORK
+            fileUrl: fileMeta.data.webViewLink
         });
 
         await newInsight.save();
 
-        res.json({ message: "Import successful", insight: newInsight });
+        res.json({
+            message: "Import successful",
+            insight: newInsight
+        });
 
     } catch (error) {
-        console.error("Import Error:", error);
-        res.status(500).json({ message: `Import failed: ${error.message}` });
+        console.error(error);
+        res.status(500).json({ message: "Import failed" });
     }
 });
 

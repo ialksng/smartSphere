@@ -1,8 +1,8 @@
-// client/src/App.jsx
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
-import GoogleDriveHub from './pages/GoogleDriveHub'; // <-- NEW IMPORT
+import GoogleDriveHub from './pages/GoogleDriveHub'; 
+import DocHub from './pages/DocHub';
 
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem('sphere_token');
@@ -16,12 +16,14 @@ function App() {
   return (
     <BrowserRouter basename="/projects/smartsphere">
       <Routes>
+
+        {/* Default */}
         <Route path="/" element={<Navigate to="/auth" replace />} />
-        
-        {/* Public Route */}
+
+        {/* Public */}
         <Route path="/auth" element={<Auth />} />
-        
-        {/* Protected Routes */}
+
+        {/* Protected */}
         <Route 
           path="/dashboard" 
           element={
@@ -30,8 +32,8 @@ function App() {
             </ProtectedRoute>
           } 
         />
-        
-        {/* NEW DEDICATED ROUTE */}
+
+        {/* Google Drive */}
         <Route 
           path="/cloudhub/google" 
           element={
@@ -41,7 +43,19 @@ function App() {
           } 
         />
 
+        {/* 🔥 DOCHUB (NEW) */}
+        <Route 
+          path="/dochub" 
+          element={
+            <ProtectedRoute>
+              <DocHub />
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* Fallback */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
+
       </Routes>
     </BrowserRouter>
   );

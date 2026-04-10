@@ -6,25 +6,47 @@ const insightSchema = new mongoose.Schema({
         ref: 'User', 
         required: true 
     },
+
     filename: { 
         type: String, 
         required: true 
     },
+
     fileType: { 
         type: String 
     },
+
     content: { 
         type: String, 
-        required: true // The extracted text from the document
+        required: true
     },
+
     summary: { 
-        type: String   // We can optionally have the AI generate a quick summary on upload
+        type: String
     },
+
     source: {
         type: String,
         enum: ['local', 'google_drive', 'onedrive'],
         default: 'local'
+    },
+
+    contentType: {
+        type: String,
+        enum: ['text', 'pdf', 'image'],
+        default: 'text'
+    },
+
+    driveFileId: {
+        type: String,
+        default: null
+    },
+
+    fileUrl: {
+        type: String,
+        default: null
     }
+
 }, { timestamps: true });
 
 module.exports = mongoose.model('Insight', insightSchema);
