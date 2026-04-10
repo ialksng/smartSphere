@@ -7,7 +7,10 @@ const mammoth = require('mammoth');
 const extractTextFromBuffer = async (buffer, mimetype) => {
     try {
         if (mimetype === 'application/pdf') {
-            const data = await pdfParse(buffer);
+            // FIX: Safely unwrap the function whether it is a CommonJS or ESM export
+            const parsePDF = pdfParse.default || pdfParse; 
+            
+            const data = await parsePDF(buffer);
             return data.text;
         } 
         else if (mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {

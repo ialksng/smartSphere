@@ -11,7 +11,7 @@ export default function Dashboard() {
 
     const fetchInsights = async () => {
         try {
-            // FIX: Added the base path
+            // Updated path to include /projects/smartsphere prefix
             const res = await fetch('/projects/smartsphere/api/ai/insights', {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('sphere_token')}`
@@ -20,6 +20,8 @@ export default function Dashboard() {
             if (res.ok) {
                 const data = await res.json();
                 setInsights(data);
+            } else {
+                console.error("Failed to fetch insights, status:", res.status);
             }
         } catch (error) {
             console.error("Failed to fetch insights", error);
