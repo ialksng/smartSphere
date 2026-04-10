@@ -9,34 +9,29 @@ const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 
-// 🔥 1. CHAT (RAG)
+// 🔥 CHAT (RAG)
 router.post('/chat', verifyToken, async (req, res) => {
     try {
         const { message, history = [] } = req.body;
 
         const recentInsights = await Insight.find({ userId: req.user.id })
             .sort({ createdAt: -1 })
-            .limit(2);
+            .limit(3);
 
-        let documentContext = "";
+        let context = "";
 
-        if (recentInsights.length > 0) {
-            documentContext += "\n\n--- KNOWLEDGE BASE CONTEXT ---\n";
-
-            recentInsights.forEach((doc) => {
-                const safeContent = doc.content.substring(0, 15000);
-                documentContext += `Document: ${doc.filename}\n${safeContent}\n\n`;
-            });
-
-            documentContext += "--- END CONTEXT ---\n\n";
-        }
+        recentInsights.forEach(doc => {
+            context += `\nDocument: ${doc.filename}\n${doc.content.substring(0, 8000)}\n`;
+        });
 
         const conversationHistory = history
             .map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.text}`)
             .join('\n');
 
         const prompt = `
-${documentContext}
+Context:
+${context}
+
 Conversation:
 ${conversationHistory}
 
@@ -46,7 +41,7 @@ AI:
 
         const reply = await analyzeText(
             prompt,
-            "You are SmartSphere AI. Use provided context if relevant, otherwise answer normally."
+            "You are SmartSphere AI. Use context if helpful."
         );
 
         res.json({ reply });
@@ -58,7 +53,7 @@ AI:
 });
 
 
-// 🔥 2. UPLOAD
+// 🔥 UPLOAD + AI TAGGING
 router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
     try {
         if (!req.file) {
@@ -72,10 +67,23 @@ router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
 
         const cleanText = extractedText.replace(/\s+/g, ' ').trim();
 
+        // 🧠 SUMMARY
         const summary = await analyzeText(
             `Summarize in 2 sentences:\n\n${cleanText.substring(0, 3000)}`,
             "You are a document summarizer."
         );
+
+        // 🧠 TAG GENERATION (NEW)
+        const tagPrompt = `
+Extract 3-5 short tags from this document (comma separated):
+${cleanText.substring(0, 2000)}
+        `;
+
+        const tagsRaw = await analyzeText(tagPrompt);
+        const tags = tagsRaw
+            .split(',')
+            .map(t => t.trim().toLowerCase())
+            .filter(Boolean);
 
         const newInsight = new Insight({
             userId: req.user.id,
@@ -83,6 +91,7 @@ router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
             fileType: req.file.mimetype,
             content: cleanText,
             summary,
+            tags, // 🔥 NEW
             source: 'local'
         });
 
@@ -100,7 +109,7 @@ router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
 });
 
 
-// 🔥 3. RECENT INSIGHTS (for dashboard/activity)
+// 🔥 RECENT ACTIVITY
 router.get('/insights', verifyToken, async (req, res) => {
     try {
         const insights = await Insight.find({ userId: req.user.id })
@@ -108,6 +117,7 @@ router.get('/insights', verifyToken, async (req, res) => {
             .limit(10);
 
         res.json(insights);
+
     } catch (error) {
         console.error("Insights Error:", error);
         res.status(500).json({ message: error.message });

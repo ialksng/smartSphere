@@ -1,24 +1,57 @@
 const express = require('express');
 const router = express.Router();
 
-const Doc = require('../models/Doc'); // or your document model
-const Insight = require('../models/Insight'); // for AI chats (if using)
+const Insight = require('../models/Insight');
+const { verifyToken } = require('../middleware/auth.middleware');
 
-router.get('/', async (req, res) => {
+
+// 📊 GET STATS (SaaS-level)
+router.get('/', verifyToken, async (req, res) => {
   try {
-    const totalDocs = await Doc.countDocuments();
-    const totalChats = await Insight.countDocuments();
+    const userId = req.user.id;
 
-    // Simple storage calc (you can improve later)
-    const storage = `${(totalDocs * 0.5).toFixed(1)} MB`;
+    // 📄 Total Docs
+    const totalDocs = await Insight.countDocuments({ userId });
+
+    // ⭐ Favorites
+    const totalFavorites = await Insight.countDocuments({
+      userId,
+      isFavorite: true
+    });
+
+    // 🧠 AI Chats (using insights as proxy)
+    const totalChats = await Insight.countDocuments({ userId });
+
+    // 📊 File Type Breakdown
+    const fileTypes = await Insight.aggregate([
+      { $match: { userId: req.user.id } },
+      {
+        $group: {
+          _id: "$fileType",
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // 💾 Storage Calculation (better)
+    const docs = await Insight.find({ userId });
+
+    const totalSizeBytes = docs.reduce((acc, doc) => {
+      return acc + (doc.size || 0);
+    }, 0);
+
+    const storageMB = (totalSizeBytes / (1024 * 1024)).toFixed(2);
 
     res.json({
       docs: totalDocs,
+      favorites: totalFavorites,
       chats: totalChats,
-      storage
+      storage: `${storageMB} MB`,
+      fileTypes
     });
 
   } catch (err) {
+    console.error("Stats Error:", err);
     res.status(500).json({ error: 'Failed to fetch stats' });
   }
 });

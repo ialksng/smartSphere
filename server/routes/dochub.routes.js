@@ -4,19 +4,30 @@ const Insight = require('../models/Insight');
 const { verifyToken } = require('../middleware/auth.middleware');
 
 
-// 🔥 GET ALL DOCS + SEARCH
+// 🔥 GET ALL DOCS + SEARCH + FILTERS
 router.get('/', verifyToken, async (req, res) => {
     try {
-        const { search } = req.query;
+        const { search, folder, favorite } = req.query;
 
         let query = { userId: req.user.id };
 
-        // 🔍 Search support
+        // 🔍 SEARCH
         if (search) {
             query.$or = [
                 { filename: { $regex: search, $options: 'i' } },
-                { content: { $regex: search, $options: 'i' } }
+                { content: { $regex: search, $options: 'i' } },
+                { tags: { $regex: search, $options: 'i' } }
             ];
+        }
+
+        // 📁 FILTER BY FOLDER
+        if (folder) {
+            query.folder = folder;
+        }
+
+        // ⭐ FILTER FAVORITES
+        if (favorite === 'true') {
+            query.isFavorite = true;
         }
 
         const docs = await Insight.find(query)
@@ -52,14 +63,14 @@ router.get('/:id', verifyToken, async (req, res) => {
 });
 
 
-// 🔥 UPDATE DOC
+// 🔥 UPDATE DOC (CONTENT + FOLDER)
 router.put('/:id', verifyToken, async (req, res) => {
     try {
-        const { content } = req.body;
+        const { content, folder } = req.body;
 
         const updated = await Insight.findOneAndUpdate(
             { _id: req.params.id, userId: req.user.id },
-            { content },
+            { content, folder },
             { new: true }
         );
 
@@ -67,6 +78,50 @@ router.put('/:id', verifyToken, async (req, res) => {
 
     } catch (error) {
         console.error("Update Error:", error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
+
+// ⭐ TOGGLE FAVORITE
+router.patch('/:id/favorite', verifyToken, async (req, res) => {
+    try {
+        const doc = await Insight.findOne({
+            _id: req.params.id,
+            userId: req.user.id
+        });
+
+        if (!doc) {
+            return res.status(404).json({ message: "Document not found" });
+        }
+
+        doc.isFavorite = !doc.isFavorite;
+        await doc.save();
+
+        res.json(doc);
+
+    } catch (error) {
+        console.error("Favorite Error:", error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
+
+// 🏷 ADD / UPDATE TAGS
+router.patch('/:id/tags', verifyToken, async (req, res) => {
+    try {
+        const { tags } = req.body;
+
+        const updated = await Insight.findOneAndUpdate(
+            { _id: req.params.id, userId: req.user.id },
+            { tags },
+            { new: true }
+        );
+
+        res.json(updated);
+
+    } catch (error) {
+        console.error("Tags Error:", error);
         res.status(500).json({ message: error.message });
     }
 });

@@ -25,6 +25,7 @@ const insightSchema = new mongoose.Schema({
         type: String
     },
 
+    // 🔥 SOURCE
     source: {
         type: String,
         enum: ['local', 'google_drive', 'onedrive'],
@@ -45,6 +46,35 @@ const insightSchema = new mongoose.Schema({
     fileUrl: {
         type: String,
         default: null
+    },
+
+    // =========================
+    // 🔥 NEW SaaS FEATURES
+    // =========================
+
+    // 📁 Folder support
+    folder: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Folder',
+        default: null
+    },
+
+    // ⭐ Favorites
+    isFavorite: {
+        type: Boolean,
+        default: false
+    },
+
+    // 🧠 AI Tags
+    tags: {
+        type: [String],
+        default: []
+    },
+
+    // 📊 File size (for analytics)
+    size: {
+        type: Number,
+        default: 0
     }
 
 }, { timestamps: true });
