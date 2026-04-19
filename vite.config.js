@@ -7,5 +7,5 @@ export default defineConfig({
     react(),
     tailwindcss()
   ],
-  base: '/projects/smartsphere/',
+  base: '/',
 });
