@@ -24,7 +24,7 @@ const ProtectedLayout = ({ children }) => (
 
 function App() {
   return (
-    <BrowserRouter basename="/projects/smartsphere">
+    <BrowserRouter>
       <Routes>
 
         <Route path="/" element={<Navigate to="/auth" replace />} />
