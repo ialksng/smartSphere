@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText, Cloud, Bot, Loader2, Plus, Search, Star, DownloadCloud } from 'lucide-react';
+import apiClient from '../services/apiClient';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -21,8 +22,6 @@ export default function Dashboard() {
     storage: "0 MB"
   });
 
-  const token = localStorage.getItem('sphere_token');
-
   useEffect(() => {
     fetchDocs();
     fetchStats();
@@ -40,14 +39,8 @@ export default function Dashboard() {
       setShowDropdown(true);
       
       try {
-        const res = await fetch(`/projects/smartsphere/api/dochub/search?q=${encodeURIComponent(search)}`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        });
-
-        const data = await res.json();
-        setSearchResults(Array.isArray(data) ? data : []);
+        const res = await apiClient.get(`/dochub/search?q=${encodeURIComponent(search)}`);
+        setSearchResults(Array.isArray(res.data) ? res.data : []);
       } catch (err) {
         console.error(err);
         setSearchResults([]);
@@ -57,19 +50,13 @@ export default function Dashboard() {
     }, 500);
 
     return () => clearTimeout(delay);
-  }, [search, token]);
+  }, [search]);
 
   const fetchDocs = async () => {
     try {
-      const res = await fetch(`/projects/smartsphere/api/dochub`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setDocs(data.slice(0, 5));
+      const res = await apiClient.get(`/dochub`);
+      if (Array.isArray(res.data)) {
+        setDocs(res.data.slice(0, 5));
       }
     } catch (err) {
       console.error(err);
@@ -80,14 +67,8 @@ export default function Dashboard() {
 
   const fetchStats = async () => {
     try {
-      const res = await fetch('/projects/smartsphere/api/stats', {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-
-      const data = await res.json();
-      setStats(data);
+      const res = await apiClient.get('/stats');
+      setStats(res.data);
     } catch (err) {
       console.error(err);
     }
@@ -103,14 +84,7 @@ export default function Dashboard() {
     formData.append("file", file);
 
     try {
-      await fetch('/projects/smartsphere/api/ai/upload', {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
-        body: formData
-      });
-
+      await apiClient.post('/ai/upload', formData);
       fetchDocs();
       fetchStats();
     } catch (err) {
@@ -130,30 +104,21 @@ export default function Dashboard() {
     
     try {
       const endpoint = doc.source === 'google_drive_live' 
-        ? '/projects/smartsphere/api/cloud/google/import'
-        : '/projects/smartsphere/api/cloud/microsoft/import';
+        ? '/cloud/google/import'
+        : '/cloud/microsoft/import';
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          fileId: doc._id,
-          fileName: doc.filename,
-          mimeType: doc.mimeType
-        })
+      const res = await apiClient.post(endpoint, {
+        fileId: doc._id,
+        fileName: doc.filename,
+        mimeType: doc.mimeType
       });
-
-      const data = await res.json();
       
-      if (data.insight) {
+      if (res.data.insight) {
         setShowDropdown(false);
         setSearch("");
-        navigate('/editor', { state: { docId: data.insight._id } });
+        navigate('/editor', { state: { docId: res.data.insight._id } });
       } else {
-        alert(data.message || "Failed to import file");
+        alert(res.data.message || "Failed to import file");
       }
     } catch (err) {
       console.error("Import error:", err);

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, Lock, Mail, User } from 'lucide-react';
+import apiClient from '../services/apiClient';
 
 export default function Auth() {
     const navigate = useNavigate();
@@ -16,7 +17,7 @@ export default function Auth() {
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
-        setError(''); // Clear error when user types
+        setError('');
     };
 
     const handleSubmit = async (e) => {
@@ -24,33 +25,20 @@ export default function Auth() {
         setIsLoading(true);
         setError('');
 
-        // --- FIX: Added the base path to the endpoints ---
-        const endpoint = isLogin 
-            ? '/projects/smartsphere/api/auth/login' 
-            : '/projects/smartsphere/api/auth/register';
+        const endpoint = isLogin ? '/auth/login' : '/auth/register';
+        const payload = isLogin 
+            ? { email: formData.email, password: formData.password } 
+            : formData;
 
         try {
-            const res = await fetch(endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(isLogin ? { 
-                    email: formData.email, 
-                    password: formData.password 
-                } : formData)
-            });
-
-            const data = await res.json();
-
-            if (res.ok) {
-                // Save the JWT token to local storage
-                localStorage.setItem('sphere_token', data.token);
-                // Redirect to the dashboard
-                navigate('/dashboard');
-            } else {
-                setError(data.message || 'Authentication failed. Please try again.');
-            }
+            const res = await apiClient.post(endpoint, payload);
+            
+            localStorage.setItem('sphere_token', res.data.token);
+            localStorage.setItem('userInfo', JSON.stringify(res.data));
+            
+            navigate('/dashboard');
         } catch (err) {
-            setError('Network error. Please check your connection.');
+            setError(err.response?.data?.message || 'Authentication failed. Please try again.');
         } finally {
             setIsLoading(false);
         }
@@ -58,7 +46,6 @@ export default function Auth() {
 
     return (
         <div className="min-h-screen bg-darkBg text-white flex items-center justify-center p-4 relative overflow-hidden">
-            {/* Background decorative blobs */}
             <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/20 rounded-full blur-[120px]"></div>
             <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-600/20 rounded-full blur-[120px]"></div>
 

@@ -4,7 +4,6 @@ import ChatInterface from '../components/ChatInterface';
 
 export default function BuddyBot() {
   const location = useLocation();
-  // Capture the file if navigating from MyStorage
   const importedFile = location.state?.importedFile || null;
 
   return (
@@ -16,7 +15,6 @@ export default function BuddyBot() {
         </p>
       </div>
       
-      {/* Container that takes up the remaining height for the chat interface */}
       <div className="flex-1 min-h-0">
         <ChatInterface 
           initialFile={importedFile} 

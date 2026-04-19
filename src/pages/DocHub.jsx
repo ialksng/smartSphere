@@ -1,21 +1,20 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Star, Trash2, Plus, Search, Cloud, Download, RefreshCw, X } from "lucide-react";
+import apiClient from "../services/apiClient";
 
 const DocHub = () => {
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
-  const [view, setView] = useState("home"); // home, files, favorites, trash
+  const [view, setView] = useState("home");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // New Document Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [docName, setDocName] = useState("");
   const [docLocation, setDocLocation] = useState("local");
   const [cloudProvider, setCloudProvider] = useState("google");
 
-  // Debounced Search & View Fetcher
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       if (search.trim() !== "") {
@@ -23,7 +22,7 @@ const DocHub = () => {
       } else if (view !== "home") {
         fetchItems(view);
       }
-    }, 500); // Waits 500ms after typing stops before searching
+    }, 500);
 
     return () => clearTimeout(delayDebounceFn);
   }, [search, view]);
@@ -31,18 +30,12 @@ const DocHub = () => {
   const fetchItems = async (currentView) => {
     setLoading(true);
     try {
-      let url = "/projects/smartsphere/api/dochub?all=true";
-      
+      let url = "/dochub?all=true";
       if (currentView === "favorites") url += "&isFavorite=true";
       if (currentView === "trash") url += "&isTrashed=true";
 
-      const res = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("sphere_token")}`
-        }
-      });
-      const data = await res.json();
-      setItems(data || []);
+      const res = await apiClient.get(url);
+      setItems(res.data || []);
     } catch (err) {
       console.error("Failed to fetch documents", err);
     } finally {
@@ -50,15 +43,11 @@ const DocHub = () => {
     }
   };
 
-  // Dedicated function to hit the backend search API
   const fetchSearchResults = async (query) => {
     setLoading(true);
     try {
-      const res = await fetch(`/projects/smartsphere/api/dochub/search?q=${encodeURIComponent(query)}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("sphere_token")}` }
-      });
-      const data = await res.json();
-      setItems(data || []);
+      const res = await apiClient.get(`/dochub/search?q=${encodeURIComponent(query)}`);
+      setItems(res.data || []);
     } catch (err) {
       console.error("Failed to search documents", err);
     } finally {
@@ -72,7 +61,6 @@ const DocHub = () => {
     return "💻";
   };
 
-  // ---- NEW DOCUMENT LOGIC ----
   const handleCreateDocument = async () => {
     if (!docName.trim()) {
       alert("Please provide a document name.");
@@ -81,34 +69,16 @@ const DocHub = () => {
 
     setLoading(true);
     try {
-      // 1. Always create the blank file locally first
-      const res = await fetch("/projects/smartsphere/api/dochub/file", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("sphere_token")}`
-        },
-        body: JSON.stringify({ filename: docName, content: "" })
-      });
-      
-      const newFile = await res.json();
+      const res = await apiClient.post("/dochub/file", { filename: docName, content: "" });
+      const newFile = res.data;
 
-      // 2. If user selected CloudHub, immediately export the new file to the selected cloud
       if (docLocation === "cloud") {
-        await fetch(`/projects/smartsphere/api/cloud/${cloudProvider}/upload-dochub`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${localStorage.getItem("sphere_token")}`
-            },
-            body: JSON.stringify({ fileId: newFile._id }) 
-        });
+        await apiClient.post(`/cloud/${cloudProvider}/upload-dochub`, { fileId: newFile._id });
       }
 
       setIsModalOpen(false);
       setDocName("");
       navigate(`/doceditor/${newFile._id}`);
-
     } catch (err) {
       console.error("Failed to create file", err);
       alert("Failed to create document.");
@@ -117,7 +87,6 @@ const DocHub = () => {
     }
   };
 
-  // ---- FILE ACTIONS ----
   const openFile = (file) => {
     navigate(`/doceditor/${file._id}`);
   };
@@ -133,15 +102,7 @@ const DocHub = () => {
 
   const toggleFavorite = async (file) => {
     try {
-      await fetch(`/projects/smartsphere/api/dochub/${file._id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("sphere_token")}`
-        },
-        body: JSON.stringify({ isFavorite: !file.isFavorite })
-      });
-      // Force refresh using current search or view
+      await apiClient.put(`/dochub/${file._id}`, { isFavorite: !file.isFavorite });
       if (search) fetchSearchResults(search);
       else fetchItems(view);
     } catch (err) {
@@ -152,21 +113,9 @@ const DocHub = () => {
   const toggleTrash = async (file, moveToTrash) => {
     try {
       if (moveToTrash) {
-          await fetch(`/projects/smartsphere/api/dochub/${file._id}`, {
-            method: "DELETE",
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("sphere_token")}`
-            }
-          });
+        await apiClient.delete(`/dochub/${file._id}`);
       } else {
-          await fetch(`/projects/smartsphere/api/dochub/${file._id}`, {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${localStorage.getItem("sphere_token")}`
-            },
-            body: JSON.stringify({ isTrashed: false })
-          });
+        await apiClient.put(`/dochub/${file._id}`, { isTrashed: false });
       }
       if (search) fetchSearchResults(search);
       else fetchItems(view);
@@ -178,12 +127,7 @@ const DocHub = () => {
   const deletePermanently = async (file) => {
     if (!window.confirm("Are you sure you want to permanently delete this file?")) return;
     try {
-      await fetch(`/projects/smartsphere/api/dochub/${file._id}/permanent`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("sphere_token")}`
-        }
-      });
+      await apiClient.delete(`/dochub/${file._id}/permanent`);
       if (search) fetchSearchResults(search);
       else fetchItems(view);
     } catch (err) {
@@ -191,7 +135,6 @@ const DocHub = () => {
     }
   };
 
-  // ---- RENDER SUB-VIEWS (Files, Favorites, Trash) ----
   if (view !== "home") {
     let title = "All Files";
     if (view === "favorites") title = "Favorites";
@@ -237,7 +180,6 @@ const DocHub = () => {
                   </div>
 
                   <div className="flex items-center gap-4 text-sm">
-                    {/* IF IN TRASH VIEW */}
                     {view === "trash" ? (
                       <>
                         <button onClick={() => toggleTrash(file, false)} className="flex items-center gap-1 text-green-400 hover:text-green-300">
@@ -248,9 +190,7 @@ const DocHub = () => {
                         </button>
                       </>
                     ) : (
-                      /* IF IN FILES/FAVORITES VIEW */
                       <>
-                        {/* Only show Favorite and Trash buttons if it's a local file, since we aren't supporting starring cloud files yet */}
                         {!file.isExternal && (
                           <button onClick={() => toggleFavorite(file)} className="text-gray-400 hover:text-yellow-400 transition-colors" title="Toggle Favorite">
                             <Star size={18} fill={file.isFavorite ? "currentColor" : "none"} className={file.isFavorite ? "text-yellow-400" : ""} />
@@ -279,7 +219,6 @@ const DocHub = () => {
     );
   }
 
-  // ---- RENDER HOME VIEW ----
   return (
     <div className="p-8 bg-[#0b0f19] text-white min-h-screen relative">
       <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-4 py-3 rounded-xl mb-8 max-w-xl focus-within:ring-1 focus-within:ring-blue-500 transition-all">
@@ -321,7 +260,6 @@ const DocHub = () => {
         </div>
       </div>
 
-      {/* NEW DOCUMENT CREATION MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-[#1a2235] p-6 rounded-xl w-[400px] border border-white/10 shadow-2xl">

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Cloud, HardDrive } from "lucide-react";
+import apiClient from "../services/apiClient";
 
 export default function CloudHub() {
   const navigate = useNavigate();
@@ -13,15 +14,8 @@ export default function CloudHub() {
 
   const fetchStorage = async () => {
     try {
-      const res = await fetch('/projects/smartsphere/api/cloud/google/storage', {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('sphere_token')}`
-        }
-      });
-
-      const data = await res.json();
-      setGoogleStorage(data);
-
+      const res = await apiClient.get('/cloud/google/storage');
+      setGoogleStorage(res.data);
     } catch (err) {
       console.error(err);
     }
@@ -39,7 +33,6 @@ export default function CloudHub() {
 
       <h1 className="text-2xl font-semibold mb-6">CloudHub</h1>
 
-      {/* 🔥 TOTAL STORAGE CARD */}
       <div className="mb-8 p-6 rounded-2xl bg-white/5 border border-white/10">
         <div className="flex items-center gap-3 mb-2">
           <HardDrive className="text-emerald-400" />
@@ -55,10 +48,8 @@ export default function CloudHub() {
         </p>
       </div>
 
-      {/* CLOUD CARDS */}
       <div className="grid md:grid-cols-3 gap-6">
 
-        {/* GOOGLE DRIVE */}
         <div
           onClick={() => navigate('/cloudhub/google')}
           className="p-6 rounded-2xl border border-white/10 cursor-pointer hover:bg-white/10 bg-blue-500/10"
@@ -75,14 +66,12 @@ export default function CloudHub() {
           )}
         </div>
 
-        {/* ONEDRIVE */}
         <div className="p-6 rounded-2xl border border-white/10 bg-indigo-500/10">
           <Cloud className="mb-3 text-indigo-400" />
           <h2 className="text-lg">OneDrive</h2>
           <p className="text-sm text-gray-500 mt-2">Not connected</p>
         </div>
 
-        {/* DROPBOX */}
         <div className="p-6 rounded-2xl border border-white/10 bg-purple-500/10">
           <Cloud className="mb-3 text-purple-400" />
           <h2 className="text-lg">Dropbox</h2>
